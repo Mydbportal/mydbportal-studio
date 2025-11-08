@@ -15,7 +15,7 @@ export function HeroSection() {
         transition={{ duration: 0.6 }}
       >
         <h1 className="text-5xl font-bold tracking-tight text-gray-900 dark:text-white">
-          The Modern Database Studio.
+          Mydbportal Database Studio.
           <br />
           <span className="text-4xl text-gray-900 dark:text-white">
             Simple, Secure, and Open-Source.

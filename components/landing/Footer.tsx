@@ -8,7 +8,7 @@ export function Footer() {
     <footer className="border-t bg-gray-50 dark:border-gray-800 dark:bg-gray-900">
       <div className="container mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          &copy; {currentYear} Portal Database Studio. All rights reserved.
+          &copy; {currentYear} Mydbportal Database Studio. All rights reserved.
         </p>
         <div className="flex items-center gap-x-6 text-sm font-medium text-gray-600 dark:text-gray-300">
           <Link href="/studio" className="hover:text-blue-500">
