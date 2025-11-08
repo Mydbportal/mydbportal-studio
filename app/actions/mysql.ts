@@ -2,6 +2,7 @@
 
 import { mysqlConnector } from "@/lib/adapters/mysql";
 import {
+  buildCreateMysqlTableSQL,
   buildSQL,
   generatMysqlDummyColumnName,
   sanitizeIdentifier,
@@ -22,7 +23,7 @@ export async function getMysqlData(
   connection: Connection,
   tableName: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
 ): Promise<{
   success: boolean;
   data?: Record<string, unknown>[];
@@ -45,7 +46,7 @@ export async function getMysqlData(
 
     // Fetch schema info
     const [schemaRows] = await mysqlConnection.execute(
-      `SHOW COLUMNS FROM \`${tableName}\``
+      `SHOW COLUMNS FROM \`${tableName}\``,
     );
 
     interface MySQLSchemaRow {
@@ -65,13 +66,13 @@ export async function getMysqlData(
         columnKey: row.Key,
         defaultValue: row.Default,
         extra: row.Extra,
-      })
+      }),
     );
 
     const schema: TableSchema = { tableName, columns };
 
     const [countRows] = await mysqlConnection.execute<CountRow[]>(
-      `SELECT COUNT(*) as total FROM \`${tableName}\``
+      `SELECT COUNT(*) as total FROM \`${tableName}\``,
     );
 
     const totalPages: number = Math.ceil(countRows[0]?.total / pageSize);
@@ -82,8 +83,8 @@ export async function getMysqlData(
     // Fetch data with pagination
     const [dataRows] = await mysqlConnection.query(
       `SELECT * FROM \`${tableName}\` LIMIT ${Number(pageSize)} OFFSET ${Number(
-        offset
-      )}`
+        offset,
+      )}`,
     );
 
     return {
@@ -123,7 +124,7 @@ export async function getMysqlData(
 export async function insertMysqlRaw(
   connection: Connection,
   tableName: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): Promise<{ success: boolean; message: string }> {
   let mysqlConnection;
   try {
@@ -145,7 +146,7 @@ export async function insertMysqlRaw(
     const placeholders = columns.map(() => "?").join(", ");
 
     const query = `INSERT INTO \`${sanitizeIdentifier(
-      tableName
+      tableName,
     )}\` (\`${columns.join("`, `")}\`) VALUES (${placeholders})`;
 
     await mysqlConnection.execute(query, values);
@@ -178,7 +179,7 @@ export async function deleteMysqlRow(
   connection: Connection,
   tableName: string,
   primaryKeyColumn: string,
-  primaryKeyValue: string | number
+  primaryKeyValue: string | number,
 ): Promise<{ success: boolean; message: string }> {
   let mysqlConnection;
   try {
@@ -226,7 +227,7 @@ export async function updateMysqlRow(
   tableName: string,
   primaryKeyColumn: string,
   primaryKeyValue: string | number,
-  rowData: Record<string, unknown>
+  rowData: Record<string, unknown>,
 ): Promise<{ success: boolean; message: string }> {
   let mysqlConnection;
   try {
@@ -284,7 +285,7 @@ export async function updateMysqlRow(
 export async function addMysqlColumn(
   connection: Connection,
   columns: ColumnOptions[],
-  tableName: string
+  tableName: string,
 ): Promise<{ success: boolean; message: string }> {
   let client;
   try {
@@ -301,7 +302,6 @@ export async function addMysqlColumn(
     }
 
     const query = buildSQL(columns, "mysql", tableName);
-    console.log("Generated MySQL query:", query);
 
     await client.query(query);
 
@@ -331,7 +331,8 @@ export async function addMysqlColumn(
 
 export async function createMysqlTable(
   connection: Connection,
-  tableName: string
+  tableName: string,
+  columns: ColumnOptions[],
 ): Promise<{ success: boolean; message: string }> {
   let client;
   try {
@@ -344,14 +345,8 @@ export async function createMysqlTable(
       return { success: false, message: "Invalid table name." };
     }
 
-    const dummyColumn = generatMysqlDummyColumnName();
-    if (!isValidIdent(dummyColumn)) {
-      return { success: false, message: "Invalid dummy column name." };
-    }
-
-    const query = `CREATE TABLE \`${tableName}\` (\`${dummyColumn}\` TINYINT NULL)`;
-    console.log("Generated MySQL query:", query);
-
+    const query = buildCreateMysqlTableSQL(columns, tableName);
+    console.log(query);
     await client.execute(query);
 
     return { success: true, message: "Table created successfully." };
@@ -383,7 +378,7 @@ export async function createMysqlTable(
 
 export async function truncateMysqlTable(
   connection: Connection,
-  tableName: string
+  tableName: string,
 ): Promise<{ success: boolean; message: string }> {
   let client;
   try {
@@ -431,7 +426,7 @@ export async function truncateMysqlTable(
 
 export async function deleteMysqlTable(
   connection: Connection,
-  tableName: string
+  tableName: string,
 ): Promise<{ success: boolean; message: string }> {
   let client;
   try {

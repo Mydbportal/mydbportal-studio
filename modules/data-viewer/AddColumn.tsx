@@ -27,21 +27,25 @@ import { MYSQL_TYPES, POSTGRES_TYPES } from "@/lib/constants";
 import { buildSQLFragment } from "@/lib/helpers/helpers";
 import { addPostgresColumn } from "@/app/actions/postgres";
 import { Plus } from "lucide-react";
-import { addMysqlColumn } from "@/app/actions/mysql";
+import { addMysqlColumn, createMysqlTable } from "@/app/actions/mysql";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function AddColumnDialog({
   tableName,
   connection,
   dialect,
   schema,
+  create,
 }: {
   tableName: string;
   dialect: Dialect;
   connection: Connection;
   schema?: string;
+  create?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   const [columns, setColumns] = useState<ColumnOptions[]>([
     {
       name: "",
@@ -59,7 +63,7 @@ export default function AddColumnDialog({
   const handleChange = <K extends keyof ColumnOptions>(
     index: number,
     key: K,
-    value: ColumnOptions[K]
+    value: ColumnOptions[K],
   ) => {
     setColumns((prev) => {
       const newCols = [...prev];
@@ -82,6 +86,7 @@ export default function AddColumnDialog({
         comment: "",
       },
     ]);
+    
   };
 
   const removeColumn = (index: number) => {
@@ -96,40 +101,49 @@ export default function AddColumnDialog({
   };
 
   const handleSubmit = async () => {
-    if (dialect === "postgresql") {
-      const result = await addPostgresColumn(
-        connection,
-        columns,
-        tableName,
-        schema
-      );
+    if (create) {
+      const result = await createMysqlTable(connection, tableName, columns);
       if (result.success) {
         toast.success(result.message ?? "column created successfuly ");
       } else {
         toast.error(result.message ?? "failed to create column");
       }
-    } else if (dialect === "mysql") {
-      const result = await addMysqlColumn(connection, columns, tableName);
-      if (result.success) {
-        toast.success(result.message ?? "column created successfully");
-      } else {
-        toast.error(result.message ?? "failed to create column");
+    } else {
+      if (dialect === "postgresql") {
+        const result = await addPostgresColumn(
+          connection,
+          columns,
+          tableName,
+          schema,
+        );
+        if (result.success) {
+          toast.success(result.message ?? "column created successfuly ");
+        } else {
+          toast.error(result.message ?? "failed to create column");
+        }
+      } else if (dialect === "mysql") {
+        const result = await addMysqlColumn(connection, columns, tableName);
+        if (result.success) {
+          toast.success(result.message ?? "column created successfully");
+        } else {
+          toast.error(result.message ?? "failed to create column");
+        }
       }
-    }
 
-    setStep("form");
-    setOpen(false);
-    setColumns([
-      {
-        name: "",
-        type: "TEXT",
-        isNullable: true,
-        isPrimaryKey: false,
-        isUnique: false,
-        default: "",
-        check: "",
-      },
-    ]);
+      setStep("form");
+      setOpen(false);
+      setColumns([
+        {
+          name: "",
+          type: "TEXT",
+          isNullable: true,
+          isPrimaryKey: false,
+          isUnique: false,
+          default: "",
+          check: "",
+        },
+      ]);
+    }
   };
 
   return (
@@ -154,7 +168,7 @@ export default function AddColumnDialog({
             <div className="space-y-4">
               {columns.map((col, idx) => {
                 const showLength = ["VARCHAR", "CHAR", "varchar"].includes(
-                  col.type
+                  col.type,
                 );
                 const showPrecision = ["NUMERIC", "DECIMAL"].includes(col.type);
                 const showArray = [
@@ -224,7 +238,7 @@ export default function AddColumnDialog({
                             handleChange(
                               idx,
                               "length",
-                              parseInt(e.target.value)
+                              parseInt(e.target.value),
                             )
                           }
                         />
@@ -239,7 +253,7 @@ export default function AddColumnDialog({
                               handleChange(
                                 idx,
                                 "precision",
-                                parseInt(e.target.value)
+                                parseInt(e.target.value),
                               )
                             }
                           />
@@ -251,7 +265,7 @@ export default function AddColumnDialog({
                               handleChange(
                                 idx,
                                 "scale",
-                                parseInt(e.target.value)
+                                parseInt(e.target.value),
                               )
                             }
                           />
@@ -266,7 +280,7 @@ export default function AddColumnDialog({
                             handleChange(
                               idx,
                               "arrayDimension",
-                              parseInt(e.target.value)
+                              parseInt(e.target.value),
                             )
                           }
                         />
@@ -345,8 +359,8 @@ export default function AddColumnDialog({
                   (c) =>
                     `ALTER TABLE ${tableName} ADD COLUMN ${buildSQLFragment(
                       c,
-                      dialect
-                    )};`
+                      dialect,
+                    )};`,
                 )
                 .join("\n")}
             </pre>

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Connection } from "@/types/connection";
 import { useState } from "react";
 import { toast } from "sonner";
+import AddColumnDialog from "./AddColumn";
 
 export function CreateTableDialog({
   connection,
@@ -31,13 +32,6 @@ export function CreateTableDialog({
       const result = await createTable(connection, table, schema);
       if (result.success) {
         toast.success(result.message ?? "Table create successfully");
-      } else {
-        toast.error(result.message ?? "failed to create table");
-      }
-    } else if (connection.type === "mysql") {
-      const result = await createMysqlTable(connection, table);
-      if (result.success) {
-        toast.success(result.success ?? "table created successfully ");
       } else {
         toast.error(result.message ?? "failed to create table");
       }
@@ -87,9 +81,18 @@ export function CreateTableDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit" onClick={handleSubmit}>
-            Create Table
-          </Button>
+          {connection.type === "mysql" ? (
+            <AddColumnDialog
+              tableName={table}
+              dialect="mysql"
+              connection={connection}
+              create={true}
+            />
+          ) : (
+            <Button type="submit" onClick={handleSubmit}>
+              Create Table
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

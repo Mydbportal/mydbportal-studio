@@ -59,8 +59,8 @@ function StudioPage() {
                 connections.find(
                   (conn) =>
                     connectionData.database === conn.database &&
-                    connectionData.host === conn.host
-                )?.id
+                    connectionData.host === conn.host,
+                )?.id,
             );
           })
           .catch((error) => {
@@ -89,7 +89,7 @@ function StudioPage() {
                 height={20}
               />
               <span className="text-xl font-bold tracking-tighter  text-yellow-200  bg-clip-text ">
-                Portal Studio{" "}
+                Mydbportal Studio{" "}
                 <span className="text-xs text-white/70">v.0.0.1</span>
               </span>
             </Link>
@@ -104,7 +104,6 @@ function StudioPage() {
         <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-[260px]">
           {/* --- Header --- */}
           <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-            {/* Mobile Navigation */}
             <Sheet>
               <SheetTrigger asChild>
                 <Button size="icon" variant="outline" className="sm:hidden">
@@ -126,7 +125,6 @@ function StudioPage() {
               </SheetContent>
             </Sheet>
 
-            {/* Breadcrumbs for context */}
             <Breadcrumb className="hidden md:flex">
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -143,7 +141,6 @@ function StudioPage() {
 
             <div className="relative ml-auto flex-1 md:grow-0"></div>
 
-            {/* Theme Toggle Button */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

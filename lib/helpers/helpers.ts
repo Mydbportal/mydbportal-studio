@@ -1,7 +1,7 @@
 import { ColumnOptions, Connection, Dialect } from "@/types/connection";
 
 export const parseConnectionString = (
-  str: string
+  str: string,
 ): Omit<Connection, "name" | "id"> => {
   try {
     const url = new URL(str);
@@ -9,7 +9,7 @@ export const parseConnectionString = (
 
     if (
       !["mysql", "postgres", "postgresql", "mongodb", "mongodb+srv"].includes(
-        urlProtocol
+        urlProtocol,
       )
     ) {
       throw new Error("Unsupported protocol");
@@ -18,8 +18,8 @@ export const parseConnectionString = (
     const type: Connection["type"] = urlProtocol.startsWith("mongo")
       ? "mongodb"
       : urlProtocol.startsWith("postgresql")
-      ? "postgresql"
-      : "mysql";
+        ? "postgresql"
+        : "mysql";
 
     const protocol =
       type === "mongodb" ? (urlProtocol as Connection["protocol"]) : undefined;
@@ -44,7 +44,7 @@ export const parseConnectionString = (
 };
 
 export const getConnectionPayload = (
-  details: Partial<Connection> | undefined
+  details: Partial<Connection> | undefined,
 ) => {
   const payload: Partial<Connection> = {
     name: details?.name,
@@ -117,7 +117,7 @@ export function buildSQLFragment(col: ColumnOptions, dialect: Dialect) {
 export function buildSQL(
   cols: ColumnOptions[],
   dialect: Dialect,
-  tableName: string
+  tableName: string,
 ) {
   if (dialect === "postgresql") {
     return (
@@ -153,7 +153,7 @@ export function buildSQL(
         .map((col: ColumnOptions) => {
           let typeStr = col.type;
 
-          if (["VARCHAR", "CHAR"].includes(col.type) && col.length) {
+          if (["VARCHAR", "CHAR", "varchar"].includes(col.type) && col.length) {
             typeStr += `(${col.length})`;
           }
           if (["DECIMAL", "NUMERIC", "FLOAT", "DOUBLE"].includes(col.type)) {
@@ -183,6 +183,37 @@ export function buildSQL(
 
   return "";
 }
+export function buildCreateMysqlTableSQL(
+  cols: ColumnOptions[],
+  tableName: string,
+) {
+  console.log(cols);
+  const colDefs = cols.map((col: ColumnOptions) => {
+    let typeStr = col.type;
+
+    if (["VARCHAR", "CHAR", "varchar"].includes(col.type) && col.length) {
+      typeStr += `(${col.length})`;
+    }
+    if (["DECIMAL", "NUMERIC", "FLOAT", "DOUBLE"].includes(col.type)) {
+      if (col.precision) {
+        typeStr += `(${col.precision}${col.scale ? `, ${col.scale}` : ""})`;
+      }
+    }
+
+    const constraints: string[] = [];
+    if (col.isPrimaryKey) constraints.push("PRIMARY KEY");
+    if (col.isUnique) constraints.push("UNIQUE");
+    if (col.isNullable === false) constraints.push("NOT NULL");
+    if (col.default) constraints.push(`DEFAULT ${col.default}`);
+    if (col.autoincrement && col.isPrimaryKey)
+      constraints.push("AUTO_INCREMENT");
+    if (col.check) constraints.push(`CHECK (${col.check})`);
+
+    return `\`${col.name}\` ${typeStr} ${constraints.join(" ")}`.trim();
+  });
+
+  return `CREATE TABLE ${tableName} (\n  ${colDefs.join(",\n  ")}\n);`;
+}
 
 export function generatMysqlDummyColumnName(): string {
   const prefix = "portalv1_placeholder_";
@@ -192,7 +223,7 @@ export function generatMysqlDummyColumnName(): string {
 
 export async function buildFullPath(
   indexOrName: string | number,
-  parentPath: (string | number)[]
+  parentPath: (string | number)[],
 ) {
   const path: (string | number)[] = [];
   let namespace = parentPath;

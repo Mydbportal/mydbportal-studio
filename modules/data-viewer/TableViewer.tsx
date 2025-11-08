@@ -103,7 +103,7 @@ export function TableViewer() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editingRowData, setEditingRowData] = useState<Record<string, unknown>>(
-    {}
+    {},
   );
   const [isAddRowDialogOpen, setIsAddRowDialogOpen] = useState(false);
 
@@ -132,7 +132,7 @@ export function TableViewer() {
     try {
       const connections = await loadConnections();
       const currentConnection = connections.find(
-        (conn) => conn.id === connectionId
+        (conn) => conn.id === connectionId,
       );
       if (!currentConnection) throw new Error("Connection not found.");
       setConnection(currentConnection);
@@ -142,7 +142,7 @@ export function TableViewer() {
         tableName,
         schema ? schema : undefined,
         currentPage,
-        rowsPerPage
+        rowsPerPage,
       );
       if (result.success && result.data) {
         setTableData(result.data as Record<string, unknown>[]);
@@ -171,7 +171,7 @@ export function TableViewer() {
     try {
       const connections = await loadConnections();
       const currentConnection = connections.find(
-        (conn) => conn.id === connectionId
+        (conn) => conn.id === connectionId,
       );
       if (!currentConnection) throw new Error("Connection not found.");
       setConnection(currentConnection);
@@ -179,7 +179,7 @@ export function TableViewer() {
       const result = await getTableData(
         currentConnection,
         tableName,
-        schema ? schema : undefined
+        schema ? schema : undefined,
       );
 
       if (result.schema) {
@@ -211,12 +211,12 @@ export function TableViewer() {
   const primaryKeyColumn = useMemo(
     () =>
       tableSchema?.columns.find((col) => col.columnKey === "PRI")?.columnName,
-    [tableSchema]
+    [tableSchema],
   );
 
   const handleSelectRow = (id: string) => {
     setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id],
     );
   };
 
@@ -232,8 +232,8 @@ export function TableViewer() {
     if (searchTerm) {
       filteredData = filteredData.filter((row) =>
         Object.values(row).some((value) =>
-          String(value).toLowerCase().includes(searchTerm.toLowerCase())
-        )
+          String(value).toLowerCase().includes(searchTerm.toLowerCase()),
+        ),
       );
     }
 
@@ -275,7 +275,7 @@ export function TableViewer() {
         primaryKeyColumn,
         editingRowId,
         editingRowData,
-        schema ? schema : undefined
+        schema ? schema : undefined,
       );
       if (result.success) {
         toast.success("Row Updated", { description: result.message });
@@ -311,8 +311,8 @@ export function TableViewer() {
         tableName,
         primaryKeyColumn,
         id,
-        schema ? schema : undefined
-      )
+        schema ? schema : undefined,
+      ),
     );
     const results = await Promise.all(promises);
 
@@ -450,15 +450,15 @@ export function TableViewer() {
   const isAllOnPageSelected =
     paginatedData.length > 0 &&
     paginatedData.every((row) =>
-      selectedRows.includes(String(row[primaryKeyColumn!]))
+      selectedRows.includes(String(row[primaryKeyColumn!])),
     );
   const isAnyOnPageSelected = paginatedData.some((row) =>
-    selectedRows.includes(String(row[primaryKeyColumn!]))
+    selectedRows.includes(String(row[primaryKeyColumn!])),
   );
 
   return (
     <TooltipProvider>
-      <Card className="h-full flex flex-col">
+      <Card className="h-full flex flex-col overflow-y-auto">
         <CardHeader>
           <CardTitle>{tableName}</CardTitle>
           <CardDescription>
@@ -506,7 +506,7 @@ export function TableViewer() {
                       setVisibleColumns((prev) =>
                         prev.includes(col.columnName)
                           ? prev.filter((id) => id !== col.columnName)
-                          : [...prev, col.columnName]
+                          : [...prev, col.columnName],
                       )
                     }
                   >
@@ -564,7 +564,7 @@ export function TableViewer() {
                     onCheckedChange={(checked) => {
                       if (!primaryKeyColumn) return;
                       const pageIds = paginatedData.map(
-                        (r) => r[primaryKeyColumn]
+                        (r) => r[primaryKeyColumn],
                       );
                       if (checked) {
                         setSelectedRows((prev) => [
@@ -572,12 +572,12 @@ export function TableViewer() {
                             new Set<string>([
                               ...prev,
                               ...pageIds.map((id) => String(id)),
-                            ])
+                            ]),
                           ),
                         ]);
                       } else {
                         setSelectedRows((prev) =>
-                          prev.filter((id) => !pageIds.includes(id))
+                          prev.filter((id) => !pageIds.includes(id)),
                         );
                       }
                     }}
@@ -586,8 +586,8 @@ export function TableViewer() {
                       isAllOnPageSelected
                         ? "checked"
                         : isAnyOnPageSelected
-                        ? "indeterminate"
-                        : "unchecked"
+                          ? "indeterminate"
+                          : "unchecked"
                     }
                   />
                 </TableHead>
@@ -605,7 +605,7 @@ export function TableViewer() {
                           className={cn(
                             "ml-2 h-4 w-4 text-muted-foreground",
                             sortConfig?.key === col.columnName &&
-                              "text-foreground"
+                              "text-foreground",
                           )}
                         />
                       </Button>
@@ -655,12 +655,12 @@ export function TableViewer() {
                                     "object" &&
                                   editingRowData[col.columnName] !== null
                                     ? JSON.stringify(
-                                        editingRowData[col.columnName]
+                                        editingRowData[col.columnName],
                                       )
                                     : editingRowData[col.columnName] !==
-                                      undefined
-                                    ? String(editingRowData[col.columnName])
-                                    : ""
+                                        undefined
+                                      ? String(editingRowData[col.columnName])
+                                      : ""
                                 }
                                 onChange={(e) =>
                                   setEditingRowData((prev) => ({
@@ -810,7 +810,7 @@ export function TableViewer() {
             <AlertDialogAction
               onClick={performDelete}
               className={cn(
-                "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                "bg-destructive text-destructive-foreground hover:bg-destructive/90",
               )}
             >
               Delete
