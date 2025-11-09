@@ -14,9 +14,7 @@ We welcome any type of contribution, not just code. You can help with:
 ### Prerequisites
 
 Before you begin, ensure you have the following installed:
-- [Bun](https://bun.sh/) (v1.0 or higher)
 - [Node.js](https://nodejs.org/) (v20.0 or higher)
-- [Git](https://git-scm.com/)
 
 ### Development Environment Setup
 
