@@ -1,6 +1,6 @@
-# Master Database Studio
+# Mydbportal studio
 
-Master Database Studio is a modern, web based database management tool designed for developers. It provides a clean and intuitive interface to connect to, explore, and manage multiple databases, including PostgreSQL, MySQL, and MongoDB and more in future.
+Mydbportal studio is a modern, web based database management tool designed for developers. It provides a clean and intuitive interface to connect to, explore, and manage multiple databases, including PostgreSQL, MySQL, and MongoDB and more in future.
 
 ## Features
 
@@ -11,7 +11,7 @@ Master Database Studio is a modern, web based database management tool designed 
 - **JSON Viewer:** View and explore JSON data within your database.
 - **Query Editor:** Write and execute custom queries with syntax highlighting.
 - **Light & Dark Mode:** Switch between light and dark themes for your comfort.
-- **Responsive Design:** Access the studio from any device.
+
 
 ## Supported Databases
 
@@ -49,10 +49,7 @@ To get a local copy up and running, follow these simple steps.
 - **Framework:** [Next.js](https://nextjs.org/)
 - **UI:** [React](https://reactjs.org/), [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
 - **Database Drivers:** `pg`, `mysql2`, `mongodb`
-- **Form Management:** [React Hook Form](https://react-hook-form.com/), [Zod](https://zod.dev/)
-- **State Management:** [Zustand](https://zustand-demo.pmnd.rs/)
-- **Code Editor:** [React Simple Code Editor](https://github.com/satya164/react-simple-code-editor), [Prism.js](https://prismjs.com/)
-- **SQL Formatter:** [sql-formatter](https://github.com/sql-formatter-org/sql-formatter)
+
 
 ## Project Structure
 
@@ -63,30 +60,22 @@ To get a local copy up and running, follow these simple steps.
 │   ├── studio/         # Main application UI
 │   └── ...
 ├── components/         # Shared UI components
-│   ├── landing/        # Components for the landing page
 │   └── ui/             # Reusable UI components (shadcn/ui)
 ├── hooks/              # Custom React hooks
 ├── lib/                # Utility functions and libraries
 │   ├── adapters/       # Database-specific adapters
-│   └── ...
+│   └── Helpers/        # Helper functions
 ├── modules/            # Feature-based modules
 │   ├── connection/     # Connection management UI
 │   ├── data-viewer/    # Data viewing and exploration UI
 │   └── master-console/ # Query editor UI
-├── public/             # Static assets
-└── ...
+
 ```
 
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) to learn how you can help.
 
 ## License
 
-\***\* to be added soon \*\***
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
