@@ -4,7 +4,6 @@ import { mysqlConnector } from "@/lib/adapters/mysql";
 import {
   buildCreateMysqlTableSQL,
   buildSQL,
-  generatMysqlDummyColumnName,
   sanitizeIdentifier,
 } from "@/lib/helpers/helpers";
 import {
