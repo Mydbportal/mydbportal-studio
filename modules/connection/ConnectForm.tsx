@@ -88,6 +88,20 @@ export function ConnectForm() {
     setTab("manual");
   };
 
+  const handleConnectionStringChange = (str: string) => {
+    setConnectionString(str);
+    try {
+      const parsed = parseConnectionString(str);
+      handleDetailsChange(parsed);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        toast.error(e.message);
+      } else {
+        toast.error("Invalid connection string format.");
+      }
+    }
+  };
+
   const handleTestConnection = async () => {
     setTestingConnection(true);
     try {
@@ -271,6 +285,7 @@ export function ConnectForm() {
               <InputField
                 label="Connection String"
                 value={connectionString}
+                onChange={handleConnectionStringChange}
                 placeholder={connectionStringExample}
               />
               <Card className="bg-muted/50">

@@ -50,7 +50,7 @@ export function ExplorerSidebar() {
   // Filter tables efficiently
   const filteredTables = useMemo(() => {
     return tables.filter((t) =>
-      t.name.toLowerCase().includes(searchTerm.toLowerCase())
+      t.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
   }, [tables, searchTerm]);
 
@@ -200,7 +200,7 @@ export function ExplorerSidebar() {
               </div>
 
               {/* Table List */}
-              <div className="flex flex-col gap-1 max-h-[35vh] w-full overflow-auto">
+              <div className="flex flex-col gap-1 max-h-[50vh] w-full overflow-auto">
                 {loadingTables ? (
                   <p className="text-sm text-muted-foreground px-3 py-2">
                     Loading tables...
@@ -225,7 +225,7 @@ export function ExplorerSidebar() {
                         className={cn(
                           "flex items-center justify-between gap-3 rounded-md px-1 py-2 text-sm text-muted-foreground transition-all hover:bg-muted/50 group hover:text-foreground",
                           activeTable === table.name &&
-                            "bg-muted/90 font-medium text-foreground dark:bg-muted"
+                            "bg-muted/90 font-medium text-foreground dark:bg-muted",
                         )}
                       >
                         <div className="flex items-center gap-2 relative">

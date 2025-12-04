@@ -34,10 +34,33 @@ export const AddRowDialog = ({
   const [newRowData, setNewRowData] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
 
+  const shouldSkipColumn = (col: any) => {
+    if (col.isPrimaryKey && col.isAutoIncrement) return true;
+    if (col.isGenerated) return true;
+
+    if (typeof col.defaultValue === "string") {
+      const v = col.defaultValue.toLowerCase().replace(/\s+/g, "");
+      if (
+        v.includes("now()") ||
+        v.includes("(now())") ||
+        v.includes("current_timestamp") ||
+        v.includes("(current_timestamp)")
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   useEffect(() => {
     if (isOpen) {
       const initialData: Record<string, unknown> = {};
+
       schema.columns.forEach((col) => {
+        // Skip auto-managed timestamp and generated columns
+        if (shouldSkipColumn(col)) return;
+
         if (col.defaultValue !== null && col.defaultValue !== undefined) {
           initialData[col.columnName] = col.defaultValue;
         } else if (col.isNullable) {
@@ -61,6 +84,7 @@ export const AddRowDialog = ({
           }
         }
       });
+
       setNewRowData(initialData);
     }
   }, [isOpen, schema]);
@@ -69,13 +93,33 @@ export const AddRowDialog = ({
     setNewRowData((prev) => ({ ...prev, [columnName]: value }));
   };
 
+  const buildCleanPayload = () => {
+    const cleaned = Object.fromEntries(
+      Object.entries(newRowData).filter(([key]) => {
+        const col = schema.columns.find((c) => c.columnName === key);
+        return col && !shouldSkipColumn(col);
+      }),
+    );
+
+    return cleaned;
+  };
+
   const handleSubmit = async () => {
     setIsSaving(true);
+
     try {
-      const result = await insertRow(connection, tableName, newRowData, Schema);
+      const cleanPayload = buildCleanPayload();
+      console.log("Payload sent to DB:", cleanPayload);
+
+      const result = await insertRow(
+        connection,
+        tableName,
+        cleanPayload,
+        Schema,
+      );
+
       if (result.success) {
         toast.success("Row Added", { description: result.message });
-
         onClose();
       } else {
         toast.error("Add Row Failed", { description: result.message });
@@ -93,40 +137,47 @@ export const AddRowDialog = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Add New Row to &quot;{tableName}&quot;</DialogTitle>
+          <DialogTitle>Add New Row to “{tableName}”</DialogTitle>
           <DialogDescription>
-            Fill in the details for the new row.{Schema}
+            Fill in the details for the new row. {Schema}
           </DialogDescription>
         </DialogHeader>
+
         <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
-          {schema.columns.map((col) => (
-            <div
-              key={col.columnName}
-              className="grid grid-cols-4 items-center gap-4"
-            >
-              <Label htmlFor={col.columnName} className="text-right">
-                {col.columnName}
-                {!col.isNullable && <span className="text-destructive">*</span>}
-              </Label>
-              <div className="col-span-3">
-                <Input
-                  id={col.columnName}
-                  value={
-                    newRowData[col.columnName] !== null &&
-                    newRowData[col.columnName] !== undefined
-                      ? String(newRowData[col.columnName])
-                      : ""
-                  }
-                  onChange={(e) =>
-                    handleFieldChange(col.columnName, e.target.value)
-                  }
-                  placeholder={col.dataType}
-                  disabled={isSaving}
-                />
+          {schema.columns
+            .filter((col) => !shouldSkipColumn(col))
+            .map((col) => (
+              <div
+                key={col.columnName}
+                className="grid grid-cols-4 items-center gap-4"
+              >
+                <Label htmlFor={col.columnName} className="text-right">
+                  {col.columnName}
+                  {!col.isNullable && (
+                    <span className="text-destructive">*</span>
+                  )}
+                </Label>
+
+                <div className="col-span-3">
+                  <Input
+                    id={col.columnName}
+                    value={
+                      newRowData[col.columnName] !== null &&
+                      newRowData[col.columnName] !== undefined
+                        ? String(newRowData[col.columnName])
+                        : ""
+                    }
+                    onChange={(e) =>
+                      handleFieldChange(col.columnName, e.target.value)
+                    }
+                    placeholder={col.dataType}
+                    disabled={isSaving}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
