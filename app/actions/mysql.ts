@@ -13,6 +13,7 @@ import {
   TableSchema,
 } from "@/types/connection";
 import { RowDataPacket } from "mysql2";
+import { getConnectionById } from "@/lib/server/connection-vault";
 
 interface CountRow extends RowDataPacket {
   total: number;
@@ -328,6 +329,15 @@ export async function addMysqlColumn(
   }
 }
 
+export async function addMysqlColumnById(
+  connectionId: string,
+  columns: ColumnOptions[],
+  tableName: string,
+) {
+  const connection = getConnectionById(connectionId);
+  return addMysqlColumn(connection, columns, tableName);
+}
+
 export async function createMysqlTable(
   connection: Connection,
   tableName: string,
@@ -345,7 +355,6 @@ export async function createMysqlTable(
     }
 
     const query = buildCreateMysqlTableSQL(columns, tableName);
-    console.log(query);
     await client.execute(query);
 
     return { success: true, message: "Table created successfully." };
@@ -373,6 +382,15 @@ export async function createMysqlTable(
       });
     }
   }
+}
+
+export async function createMysqlTableById(
+  connectionId: string,
+  tableName: string,
+  columns: ColumnOptions[],
+) {
+  const connection = getConnectionById(connectionId);
+  return createMysqlTable(connection, tableName, columns);
 }
 
 export async function truncateMysqlTable(
@@ -423,6 +441,14 @@ export async function truncateMysqlTable(
   }
 }
 
+export async function truncateMysqlTableById(
+  connectionId: string,
+  tableName: string,
+) {
+  const connection = getConnectionById(connectionId);
+  return truncateMysqlTable(connection, tableName);
+}
+
 export async function deleteMysqlTable(
   connection: Connection,
   tableName: string,
@@ -469,4 +495,12 @@ export async function deleteMysqlTable(
       });
     }
   }
+}
+
+export async function deleteMysqlTableById(
+  connectionId: string,
+  tableName: string,
+) {
+  const connection = getConnectionById(connectionId);
+  return deleteMysqlTable(connection, tableName);
 }

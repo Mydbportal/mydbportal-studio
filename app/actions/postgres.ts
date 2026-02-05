@@ -3,6 +3,7 @@
 import { pgConnector } from "@/lib/adapters/postgres";
 import { buildSQL } from "@/lib/helpers/helpers";
 import { ColumnOptions, Connection } from "@/types/connection";
+import { getConnectionById } from "@/lib/server/connection-vault";
 
 interface CountRow {
   total: number;
@@ -54,6 +55,11 @@ export async function getSchemas(connection: Connection): Promise<{
       });
     }
   }
+}
+
+export async function getSchemasById(connectionId: string) {
+  const connection = getConnectionById(connectionId);
+  return getSchemas(connection);
 }
 
 export async function getPgTableNames(
@@ -131,6 +137,14 @@ export async function getPgTableNames(
         );
     }
   }
+}
+
+export async function getPgTableNamesById(
+  connectionId: string,
+  schema?: string
+) {
+  const connection = getConnectionById(connectionId);
+  return getPgTableNames(connection, schema);
 }
 
 export async function getTableColumns(
@@ -599,6 +613,15 @@ export async function createTable(
   }
 }
 
+export async function createTableById(
+  connectionId: string,
+  tableName: string,
+  schema?: string
+) {
+  const connection = getConnectionById(connectionId);
+  return createTable(connection, tableName, schema);
+}
+
 export async function addPostgresColumn(
   connection: Connection,
   columns: ColumnOptions[],
@@ -624,8 +647,6 @@ export async function addPostgresColumn(
       : `"${tableName}"`;
 
     const query = buildSQL(columns, "postgresql", fullTableName);
-
-    console.log("Generated query:", query);
 
     await client.query(query);
 
@@ -660,6 +681,16 @@ export async function addPostgresColumn(
       });
     }
   }
+}
+
+export async function addPostgresColumnById(
+  connectionId: string,
+  columns: ColumnOptions[],
+  tableName: string,
+  schema?: string
+) {
+  const connection = getConnectionById(connectionId);
+  return addPostgresColumn(connection, columns, tableName, schema);
 }
 
 export async function createSchema(
@@ -710,6 +741,11 @@ export async function createSchema(
       });
     }
   }
+}
+
+export async function createSchemaById(connectionId: string, schema: string) {
+  const connection = getConnectionById(connectionId);
+  return createSchema(connection, schema);
 }
 
 export async function deletePgTable(
@@ -768,6 +804,15 @@ export async function deletePgTable(
   }
 }
 
+export async function deletePgTableById(
+  connectionId: string,
+  tableName: string,
+  schema?: string
+) {
+  const connection = getConnectionById(connectionId);
+  return deletePgTable(connection, tableName, schema);
+}
+
 export async function truncatePgTable(
   connection: Connection,
   tableName: string,
@@ -822,4 +867,13 @@ export async function truncatePgTable(
       });
     }
   }
+}
+
+export async function truncatePgTableById(
+  connectionId: string,
+  tableName: string,
+  schema?: string
+) {
+  const connection = getConnectionById(connectionId);
+  return truncatePgTable(connection, tableName, schema);
 }

@@ -22,25 +22,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ColumnOptions, Connection, Dialect } from "@/types/connection";
+import { ColumnOptions, Dialect } from "@/types/connection";
 import { MYSQL_TYPES, POSTGRES_TYPES } from "@/lib/constants";
 import { buildSQLFragment } from "@/lib/helpers/helpers";
-import { addPostgresColumn } from "@/app/actions/postgres";
+import { addPostgresColumnById } from "@/app/actions/postgres";
 import { Plus } from "lucide-react";
-import { addMysqlColumn, createMysqlTable } from "@/app/actions/mysql";
+import { addMysqlColumnById, createMysqlTableById } from "@/app/actions/mysql";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
 export default function AddColumnDialog({
   tableName,
-  connection,
+  connectionId,
   dialect,
   schema,
   create,
 }: {
   tableName: string;
   dialect: Dialect;
-  connection: Connection;
+  connectionId: string;
   schema?: string;
   create?: boolean;
 }) {
@@ -102,7 +102,7 @@ export default function AddColumnDialog({
 
   const handleSubmit = async () => {
     if (create) {
-      const result = await createMysqlTable(connection, tableName, columns);
+      const result = await createMysqlTableById(connectionId, tableName, columns);
       if (result.success) {
         toast.success(result.message ?? "column created successfuly ");
       } else {
@@ -110,8 +110,8 @@ export default function AddColumnDialog({
       }
     } else {
       if (dialect === "postgresql") {
-        const result = await addPostgresColumn(
-          connection,
+        const result = await addPostgresColumnById(
+          connectionId,
           columns,
           tableName,
           schema,
@@ -122,7 +122,7 @@ export default function AddColumnDialog({
           toast.error(result.message ?? "failed to create column");
         }
       } else if (dialect === "mysql") {
-        const result = await addMysqlColumn(connection, columns, tableName);
+        const result = await addMysqlColumnById(connectionId, columns, tableName);
         if (result.success) {
           toast.success(result.message ?? "column created successfully");
         } else {

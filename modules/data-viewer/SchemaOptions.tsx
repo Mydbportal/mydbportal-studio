@@ -6,17 +6,18 @@ import {
 import { Plus } from "lucide-react";
 import React from "react";
 import { CreateTableDialog } from "./CreateTableDialog";
-import { Connection } from "@/types/connection";
+import { ConnectionSummary } from "@/types/connection";
 import { CreateSchemaDialog } from "./createSchema";
 
 function SchemaOptions({
   connection,
+  connectionId,
   schema,
 }: {
-  connection: Connection;
+  connection: ConnectionSummary;
+  connectionId: string;
   schema?: string;
 }) {
-  console.log("here", schema);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="cursor-pointer bg-primary h-6 text-white rounded-md">
@@ -25,10 +26,14 @@ function SchemaOptions({
       <DropdownMenuContent>
         <div className="flex flex-col  py-4 px-1  w-60">
           {connection.type === "postgresql" && (
-            <CreateSchemaDialog connection={connection} />
+            <CreateSchemaDialog connectionId={connectionId} />
           )}
 
-          <CreateTableDialog connection={connection} schema={schema} />
+          <CreateTableDialog
+            connectionId={connectionId}
+            connectionType={connection.type}
+            schema={schema}
+          />
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

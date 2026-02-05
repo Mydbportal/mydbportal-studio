@@ -13,21 +13,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Connection, TableSchema } from "@/types/connection";
-import { insertRow } from "@/app/actions/data";
+import { TableSchema } from "@/types/connection";
+import { insertRowById } from "@/app/actions/data";
 
 export const AddRowDialog = ({
   isOpen,
   onClose,
   schema,
-  connection,
+  connectionId,
   tableName,
   Schema,
 }: {
   isOpen: boolean;
   onClose: () => void;
   schema: TableSchema;
-  connection: Connection;
+  connectionId: string;
   tableName: string;
   Schema?: string;
 }) => {
@@ -109,10 +109,8 @@ export const AddRowDialog = ({
 
     try {
       const cleanPayload = buildCleanPayload();
-      console.log("Payload sent to DB:", cleanPayload);
-
-      const result = await insertRow(
-        connection,
+      const result = await insertRowById(
+        connectionId,
         tableName,
         cleanPayload,
         Schema,

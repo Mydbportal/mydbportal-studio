@@ -187,7 +187,6 @@ export function buildCreateMysqlTableSQL(
   cols: ColumnOptions[],
   tableName: string,
 ) {
-  console.log(cols);
   const colDefs = cols.map((col: ColumnOptions) => {
     let typeStr = col.type;
 

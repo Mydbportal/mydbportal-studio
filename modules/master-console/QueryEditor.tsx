@@ -35,9 +35,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { executeQuery } from "@/app/actions/query";
-import { Connection } from "@/types/connection";
-import { loadConnections } from "@/lib/connection-storage";
+import { executeQueryById } from "@/app/actions/query";
+import { ConnectionSummary } from "@/types/connection";
+import { getConnectionMeta } from "@/app/actions/connection";
 import { useSearchParams } from "next/navigation";
 import {
   Sheet,
@@ -55,22 +55,22 @@ export function QueryEditor() {
   const searchParams = useSearchParams();
 
   const connectionId = searchParams.get("connectionId");
-  const [activeConnection, setConnection] = React.useState<Connection | null>(
+  const [activeConnection, setConnection] = React.useState<ConnectionSummary | null>(
     null
   );
 
   React.useEffect(() => {
     async function GetConnection() {
-      const connections = await loadConnections();
-      const currentConnection = connections.find(
-        (conn) => conn.id === connectionId
-      );
-
-      if (!currentConnection) {
+      if (!connectionId) {
         setError("Connection not found.");
         return;
       }
-      setConnection(currentConnection);
+      const result = await getConnectionMeta(connectionId);
+      if (!result.success || !result.connection) {
+        setError("Connection not found.");
+        return;
+      }
+      setConnection(result.connection);
     }
     GetConnection();
   }, [connectionId]);
@@ -108,8 +108,14 @@ export function QueryEditor() {
       setHistory([activeTab.query, ...history]);
     }
 
-    const { data, error } = await executeQuery(
-      { ...activeConnection },
+    if (!connectionId) {
+      setError("Connection not found.");
+      setIsLoading(false);
+      return;
+    }
+
+    const { data, error } = await executeQueryById(
+      connectionId,
       activeTab.query
     );
 

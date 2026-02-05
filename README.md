@@ -27,6 +27,10 @@ To get a local copy up and running, follow these simple steps.
 ### Prerequisites
 
 - Node.js and npm (or yarn/pnpm/bun) installed.
+- By default, a master key is auto-generated and stored at `./data/vault.key`.
+- Optional: set `DB_STUDIO_MASTER_KEY` to provide your own master key.
+- Optional: set `DB_STUDIO_MASTER_KEY_FILE` to override the key file path.
+- Optional: set `DB_STUDIO_VAULT_PATH` to override the default vault location (`./data/vault.sqlite`).
 
 ### Installation
 

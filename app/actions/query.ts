@@ -3,12 +3,12 @@
 import { mysqlConnector } from "@/lib/adapters/mysql";
 import { pgConnector } from "@/lib/adapters/postgres";
 import { Connection } from "@/types/connection";
+import { getConnectionById } from "@/lib/server/connection-vault";
 
 export async function executeQuery(
   connectionDetails: Connection,
   query: string
 ) {
-  console.log("Executing query:", query, connectionDetails);
   try {
     let results;
     if (
@@ -36,4 +36,9 @@ export async function executeQuery(
   } catch (error) {
     return { error: (error as Error).message };
   }
+}
+
+export async function executeQueryById(connectionId: string, query: string) {
+  const connection = getConnectionById(connectionId);
+  return executeQuery(connection, query);
 }

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ExplorerSidebar } from "@/modules/data-viewer/ExplorerSidebar";
 import { TableViewer } from "@/modules/data-viewer/TableViewer";
-import { addConnection } from "@/lib/connection-storage";
+import { createConnection } from "@/app/actions/connection";
 import { Connection } from "@/types/connection";
 import Image from "next/image";
 import Link from "next/link";
@@ -49,19 +49,15 @@ function StudioPage() {
         const connectionData: Omit<Connection, "id"> =
           JSON.parse(decodedString);
 
-        addConnection(connectionData)
-          .then((connections) => {
+        createConnection(connectionData)
+          .then((result) => {
+            if (!result.success || !result.connection) {
+              throw new Error(result.message || "Failed to add connection.");
+            }
             toast.success("Connection Added", {
               description: "New connection successfully added from token.",
             });
-            router.push(
-              "?connectionId=" +
-                connections.find(
-                  (conn) =>
-                    connectionData.database === conn.database &&
-                    connectionData.host === conn.host,
-                )?.id,
-            );
+            router.push(`?connectionId=${result.connection.id}`);
           })
           .catch((error) => {
             toast.error("Failed to Add Connection", {

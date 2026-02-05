@@ -36,8 +36,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { addConnection } from "@/lib/connection-storage";
-import { testConnection } from "@/app/actions/connection";
+import { createConnection, testConnection } from "@/app/actions/connection";
 import { Toaster } from "@/components/ui/sonner";
 import {
   getConnectionPayload,
@@ -55,8 +54,6 @@ export function ConnectForm() {
   const [connectionString, setConnectionString] = useState("");
   const [saveToVault, setSaveToVault] = useState(true);
   const [testingConnection, setTestingConnection] = useState(false);
-
-  console.log(details?.port);
 
   const handleDetailsChange = (updates: Partial<Connection>) => {
     setDetails((prev) => ({ ...prev, ...updates }));
@@ -90,16 +87,9 @@ export function ConnectForm() {
 
   const handleConnectionStringChange = (str: string) => {
     setConnectionString(str);
-    try {
-      const parsed = parseConnectionString(str);
-      handleDetailsChange(parsed);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        toast.error(e.message);
-      } else {
-        toast.error("Invalid connection string format.");
-      }
-    }
+
+    const parsed = parseConnectionString(str);
+    handleDetailsChange(parsed);
   };
 
   const handleTestConnection = async () => {
@@ -128,18 +118,14 @@ export function ConnectForm() {
     try {
       const newConnection = getConnectionPayload(details);
       if (saveToVault) {
-        const updatedConnections = await addConnection(newConnection);
-        const added = updatedConnections.find(
-          (conn) =>
-            conn.name === newConnection.name &&
-            conn.host === newConnection.host,
-        );
-        if (added) {
-          toast.success("Saved", {
-            description: `Connected and saved "${newConnection.name}"`,
-          });
-          router.push(`/studio?connectionId=${added.id}`);
+        const result = await createConnection(newConnection);
+        if (!result.success || !result.connection) {
+          throw new Error(result.message || "Failed to save connection.");
         }
+        toast.success("Saved", {
+          description: `Connected and saved "${newConnection.name}"`,
+        });
+        router.push(`/studio?connectionId=${result.connection.id}`);
       } else {
         toast.success("Connected", {
           description: `Connected to "${newConnection.name}"`,

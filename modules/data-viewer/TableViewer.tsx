@@ -73,9 +73,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { Connection, TableSchema } from "@/types/connection";
-import { loadConnections } from "@/lib/connection-storage";
-import { getTableData, updateRow, deleteRow } from "@/app/actions/data";
+import { ConnectionSummary, TableSchema } from "@/types/connection";
+import { getConnectionMeta } from "@/app/actions/connection";
+import {
+  getTableDataById,
+  updateRowById,
+  deleteRowById,
+} from "@/app/actions/data";
 import dynamic from "next/dynamic";
 import { AddRowDialog } from "./AddRowDialog";
 import AddColumnDialog from "./AddColumn";
@@ -89,15 +93,13 @@ export function TableViewer() {
   const tableName = searchParams.get("tableName");
   const schema = searchParams.get("schema");
 
-  const [connection, setConnection] = useState<Connection | null>(null);
+  const [connection, setConnection] = useState<ConnectionSummary | null>(null);
   const [tableData, setTableData] = useState<Record<string, unknown>[]>([]);
   const [tableSchema, setTableSchema] = useState<TableSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState<number | undefined>();
-
-  console.log("one of", totalPages);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
@@ -130,15 +132,13 @@ export function TableViewer() {
     setLoadingData(true);
     setError(null);
     try {
-      const connections = await loadConnections();
-      const currentConnection = connections.find(
-        (conn) => conn.id === connectionId,
-      );
-      if (!currentConnection) throw new Error("Connection not found.");
-      setConnection(currentConnection);
+      if (!connectionId) throw new Error("Connection not found.");
+      const meta = await getConnectionMeta(connectionId);
+      if (!meta.success || !meta.connection) throw new Error("Connection not found.");
+      setConnection(meta.connection);
 
-      const result = await getTableData(
-        currentConnection,
+      const result = await getTableDataById(
+        connectionId,
         tableName,
         schema ? schema : undefined,
         currentPage,
@@ -169,15 +169,13 @@ export function TableViewer() {
     setLoading(true);
     setError(null);
     try {
-      const connections = await loadConnections();
-      const currentConnection = connections.find(
-        (conn) => conn.id === connectionId,
-      );
-      if (!currentConnection) throw new Error("Connection not found.");
-      setConnection(currentConnection);
+      if (!connectionId) throw new Error("Connection not found.");
+      const meta = await getConnectionMeta(connectionId);
+      if (!meta.success || !meta.connection) throw new Error("Connection not found.");
+      setConnection(meta.connection);
 
-      const result = await getTableData(
-        currentConnection,
+      const result = await getTableDataById(
+        connectionId,
         tableName,
         schema ? schema : undefined,
       );
@@ -198,9 +196,6 @@ export function TableViewer() {
     }
   }, [connectionId, tableName, schema]);
 
-  if (connection) {
-    console.log("hello from table", connection);
-  }
   useEffect(() => {
     fetchTableSchema();
   }, [fetchTableSchema]);
@@ -266,17 +261,17 @@ export function TableViewer() {
   };
 
   const handleSaveEdit = async () => {
-    if (!connection || !tableName || !primaryKeyColumn || !editingRowId) return;
+    if (!connection || !connectionId || !tableName || !primaryKeyColumn || !editingRowId) return;
 
     try {
-      const result = await updateRow(
-        connection,
-        tableName,
-        primaryKeyColumn,
-        editingRowId,
-        editingRowData,
-        schema ? schema : undefined,
-      );
+    const result = await updateRowById(
+      connectionId!,
+      tableName,
+      primaryKeyColumn,
+      editingRowId,
+      editingRowData,
+      schema ? schema : undefined,
+    );
       if (result.success) {
         toast.success("Row Updated", { description: result.message });
         setEditingRowId(null);
@@ -302,12 +297,12 @@ export function TableViewer() {
   };
 
   const performDelete = async () => {
-    if (!connection || !tableName || !primaryKeyColumn) return;
+    if (!connection || !connectionId || !tableName || !primaryKeyColumn) return;
 
     const { rowIds } = deleteAlert;
     const promises = rowIds.map((id) =>
-      deleteRow(
-        connection,
+      deleteRowById(
+        connectionId!,
         tableName,
         primaryKeyColumn,
         id,
@@ -379,7 +374,7 @@ export function TableViewer() {
         <CardContent className="flex-1 overflow-auto">
           <JsonViewer
             data={tableData}
-            connection={connection}
+            connectionId={connectionId!}
             tableName={tableName}
           />
         </CardContent>
@@ -523,9 +518,9 @@ export function TableViewer() {
             >
               <PlusCircle className="h-4 w-4" /> Add Row
             </Button>
-            {connection ? (
+            {connection && connectionId ? (
               <AddColumnDialog
-                connection={connection}
+                connectionId={connectionId}
                 dialect={connection.type}
                 tableName={tableName}
                 schema={schema ? schema : undefined}
@@ -533,8 +528,12 @@ export function TableViewer() {
             ) : (
               ""
             )}
-            {connection && (
-              <TruncateTrigger connection={connection} tableName={tableName} />
+            {connection && connectionId && (
+              <TruncateTrigger
+                connectionId={connectionId}
+                connectionType={connection.type}
+                tableName={tableName}
+              />
             )}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -780,12 +779,12 @@ export function TableViewer() {
         </CardFooter>
       </Card>
 
-      {connection && tableSchema && (
+      {connection && connectionId && tableSchema && (
         <AddRowDialog
           isOpen={isAddRowDialogOpen}
           onClose={() => setIsAddRowDialogOpen(false)}
           schema={tableSchema}
-          connection={connection}
+          connectionId={connectionId}
           tableName={tableName!}
           Schema={schema ? schema : undefined}
         />

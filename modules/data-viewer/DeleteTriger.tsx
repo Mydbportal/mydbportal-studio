@@ -1,6 +1,6 @@
-import { deleteCollections } from "@/app/actions/mongo";
-import { deleteMysqlTable } from "@/app/actions/mysql";
-import { deletePgTable } from "@/app/actions/postgres";
+import { deleteCollectionsById } from "@/app/actions/mongo";
+import { deleteMysqlTableById } from "@/app/actions/mysql";
+import { deletePgTableById } from "@/app/actions/postgres";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,16 +12,19 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Connection } from "@/types/connection";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 function DeleteTriger({
-  connection,
+  connectionId,
+  connectionType,
   tableName,
+  schema,
 }: {
-  connection: Connection;
+  connectionId: string;
+  connectionType: "postgresql" | "mysql" | "mongodb";
   tableName: string;
+  schema?: string;
 }) {
   const [table, setTable] = useState<string>();
   const [confirmed, setConfirmed] = useState<boolean>(false);
@@ -32,25 +35,22 @@ function DeleteTriger({
     }
   }, [table, tableName]);
   const handleDelete = async () => {
-    if (connection.type === "mongodb") {
-      const result = await deleteCollections({
-        collection: tableName,
-        connection: connection,
-      });
+    if (connectionType === "mongodb") {
+      const result = await deleteCollectionsById(connectionId, tableName);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
       } else {
         toast.error(result.message ?? "Failed to delete collection");
       }
-    } else if (connection.type === "mysql") {
-      const result = await deleteMysqlTable(connection, tableName);
+    } else if (connectionType === "mysql") {
+      const result = await deleteMysqlTableById(connectionId, tableName);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
       } else {
         toast.error(result.message ?? "Failed to delete collection");
       }
-    } else if (connection.type === "postgresql") {
-      const result = await deletePgTable(connection, tableName);
+    } else if (connectionType === "postgresql") {
+      const result = await deletePgTableById(connectionId, tableName, schema);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
       } else {

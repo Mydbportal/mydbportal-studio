@@ -3,6 +3,7 @@
 import { mgConnector } from "@/lib/adapters/mongo";
 import { Connection } from "@/types/connection";
 import { ObjectId } from "mongodb";
+import { getConnectionById } from "@/lib/server/connection-vault";
 
 export async function getCollections(connection: Connection) {
   const client = await mgConnector(connection);
@@ -24,6 +25,11 @@ export async function getCollections(connection: Connection) {
   }
 
   return { success: true, tables: collections };
+}
+
+export async function getCollectionsById(connectionId: string) {
+  const connection = getConnectionById(connectionId);
+  return getCollections(connection);
 }
 
 export async function deleteCollections({
@@ -89,6 +95,14 @@ export async function deleteCollections({
       });
     }
   }
+}
+
+export async function deleteCollectionsById(
+  connectionId: string,
+  collection: string
+) {
+  const connection = getConnectionById(connectionId);
+  return deleteCollections({ collection, connection });
 }
 
 export async function getCollectionDocs({
@@ -160,6 +174,21 @@ export async function getCollectionDocs({
   }
 }
 
+export async function getCollectionDocsById({
+  connectionId,
+  collection,
+  page = 1,
+  pagesize = 10,
+}: {
+  connectionId: string;
+  collection: string;
+  page?: number;
+  pagesize?: number;
+}) {
+  const connection = getConnectionById(connectionId);
+  return getCollectionDocs({ collection, page, pagesize, connection });
+}
+
 export async function insertDoc(
   collectionName: string,
   document: Record<string, unknown>,
@@ -172,8 +201,6 @@ export async function insertDoc(
   try {
     client = await mgConnector(connection);
     const db = client.db(connection.database);
-    console.log(document);
-
     // Validate collection name
     const isValidIdent = (name: string) => /^[a-zA-Z0-9_]+$/.test(name);
 
@@ -220,6 +247,15 @@ export async function insertDoc(
   }
 }
 
+export async function insertDocById(
+  connectionId: string,
+  collectionName: string,
+  document: Record<string, unknown>
+) {
+  const connection = getConnectionById(connectionId);
+  return insertDoc(collectionName, document, connection);
+}
+
 export async function updateDoc(
   collectionName: string,
   id: string,
@@ -233,7 +269,6 @@ export async function updateDoc(
 }> {
   let client;
   try {
-    console.log("things to update", update);
     client = await mgConnector(connection);
     const db = client.db(connection.database);
     const col = db.collection(collectionName);
@@ -250,8 +285,6 @@ export async function updateDoc(
     }
 
     const result = await col.updateOne({ _id: objectId }, { $set: update });
-    console.log("resss", result);
-
     if (result.matchedCount === 0) {
       return {
         success: false,
@@ -286,6 +319,16 @@ export async function updateDoc(
       await client.close();
     }
   }
+}
+
+export async function updateDocById(
+  connectionId: string,
+  collectionName: string,
+  id: string,
+  update: Record<string, unknown>
+) {
+  const connection = getConnectionById(connectionId);
+  return updateDoc(collectionName, id, update, connection);
 }
 
 export async function unsetDocField(
@@ -366,6 +409,16 @@ export async function unsetDocField(
     }
   }
 }
+
+export async function unsetDocFieldById(
+  connectionId: string,
+  collectionName: string,
+  id: string,
+  field: string
+) {
+  const connection = getConnectionById(connectionId);
+  return unsetDocField(collectionName, id, field, connection);
+}
 export async function deleteDoc(
   collectionName: string,
   id: string,
@@ -436,6 +489,15 @@ export async function deleteDoc(
   }
 }
 
+export async function deleteDocById(
+  connectionId: string,
+  collectionName: string,
+  id: string
+) {
+  const connection = getConnectionById(connectionId);
+  return deleteDoc(collectionName, id, connection);
+}
+
 export async function createCollection(
   collectionName: string,
   connection: Connection
@@ -488,4 +550,12 @@ export async function createCollection(
       });
     }
   }
+}
+
+export async function createCollectionById(
+  connectionId: string,
+  collectionName: string
+) {
+  const connection = getConnectionById(connectionId);
+  return createCollection(collectionName, connection);
 }
