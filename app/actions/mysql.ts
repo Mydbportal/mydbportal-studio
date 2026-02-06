@@ -3,7 +3,7 @@
 import { mysqlConnector } from "@/lib/adapters/mysql";
 import {
   buildCreateMysqlTableSQL,
-  buildSQL,
+  buildSQLFragment,
   sanitizeIdentifier,
 } from "@/lib/helpers/helpers";
 import {
@@ -301,9 +301,21 @@ export async function addMysqlColumn(
       return { success: false, message: "No column definitions provided." };
     }
 
-    const query = buildSQL(columns, "mysql", tableName);
-
-    await client.query(query);
+    for (const col of columns) {
+      if (!col.name || !isValidIdent(col.name)) {
+        return {
+          success: false,
+          message: `Invalid column name: ${col.name || "(empty)"}`,
+        };
+      }
+      const fragment = buildSQLFragment(
+        { ...col, name: sanitizeIdentifier(col.name) },
+        "mysql",
+      );
+      const query = `ALTER TABLE \`${tableName}\` ADD COLUMN ${fragment}`;
+      console.log("[mysql] add column query:", query);
+      await client.query(query);
+    }
 
     return { success: true, message: "Column(s) added successfully." };
   } catch (error: unknown) {
@@ -354,7 +366,19 @@ export async function createMysqlTable(
       return { success: false, message: "Invalid table name." };
     }
 
-    const query = buildCreateMysqlTableSQL(columns, tableName);
+    if (!columns || columns.length === 0) {
+      return { success: false, message: "At least one column is required." };
+    }
+
+    const safeColumns = columns.map((col) => {
+      if (!col.name || !isValidIdent(col.name)) {
+        throw new Error(`Invalid column name: ${col.name || "(empty)"}`);
+      }
+      return { ...col, name: sanitizeIdentifier(col.name) };
+    });
+
+    const query = buildCreateMysqlTableSQL(safeColumns, tableName);
+    console.log("[mysql] create table query:", query);
     await client.execute(query);
 
     return { success: true, message: "Table created successfully." };

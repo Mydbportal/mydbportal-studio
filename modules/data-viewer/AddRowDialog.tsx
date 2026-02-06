@@ -35,8 +35,17 @@ export const AddRowDialog = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const shouldSkipColumn = (col: any) => {
-    if (col.isPrimaryKey && col.isAutoIncrement) return true;
-    if (col.isGenerated) return true;
+    const extra = typeof col.extra === "string" ? col.extra.toLowerCase() : "";
+    const defaultVal =
+      typeof col.defaultValue === "string"
+        ? col.defaultValue.toLowerCase()
+        : "";
+
+    const isAutoIncrement = extra.includes("auto_increment");
+    const isSerialLike = defaultVal.includes("nextval(");
+    const isIdentity = defaultVal.includes("identity");
+
+    if (isAutoIncrement || isSerialLike || isIdentity) return true;
 
     if (typeof col.defaultValue === "string") {
       const v = col.defaultValue.toLowerCase().replace(/\s+/g, "");

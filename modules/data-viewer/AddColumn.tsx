@@ -167,7 +167,7 @@ export default function AddColumnDialog({
 
             <div className="space-y-4">
               {columns.map((col, idx) => {
-                const showLength = ["VARCHAR", "CHAR", "varchar"].includes(
+                const showLength = ["VARCHAR", "CHAR", "varchar", "char"].includes(
                   col.type,
                 );
                 const showPrecision = ["NUMERIC", "DECIMAL"].includes(col.type);

@@ -1,7 +1,7 @@
 "use server";
 
 import { pgConnector } from "@/lib/adapters/postgres";
-import { buildSQL } from "@/lib/helpers/helpers";
+import { buildSQLFragment } from "@/lib/helpers/helpers";
 import { ColumnOptions, Connection } from "@/types/connection";
 import { getConnectionById } from "@/lib/server/connection-vault";
 
@@ -646,9 +646,11 @@ export async function addPostgresColumn(
       ? `"${schema}"."${tableName}"`
       : `"${tableName}"`;
 
-    const query = buildSQL(columns, "postgresql", fullTableName);
-
-    await client.query(query);
+    for (const col of columns) {
+      const fragment = buildSQLFragment(col, "postgresql");
+      const query = `ALTER TABLE ${fullTableName} ADD COLUMN ${fragment}`;
+      await client.query(query);
+    }
 
     return { success: true, message: "Columns added successfully." };
   } catch (error: unknown) {

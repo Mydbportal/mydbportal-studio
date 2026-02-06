@@ -98,8 +98,16 @@ export function CreateTableDialog({
         toast.error(result.message ?? "failed to create table");
       }
     } else if (connectionType === "mysql") {
-      if (!table.trim()) {
+      const tableName = table.trim();
+      const isValidIdent = (name: string) =>
+        /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+
+      if (!tableName) {
         toast.error("Table name is required");
+        return;
+      }
+      if (!isValidIdent(tableName)) {
+        toast.error("Table name must be letters, numbers, and underscores only.");
         return;
       }
       if (columns.length === 0) {
@@ -110,7 +118,31 @@ export function CreateTableDialog({
         toast.error("All columns must have a name and type");
         return;
       }
-      const result = await createMysqlTableById(connectionId, table, columns);
+      for (const col of columns) {
+        const colName = col.name.trim();
+        if (!colName) {
+          toast.error("Column name cannot be empty");
+          return;
+        }
+        if (!isValidIdent(colName)) {
+          toast.error(
+            `Invalid column name \"${colName}\". Use letters, numbers, and underscores only.`,
+          );
+          return;
+        }
+      }
+
+      const normalized = columns.map((col) => ({
+        ...col,
+        name: col.name.trim(),
+        type: col.type.toLowerCase(),
+      }));
+
+      const result = await createMysqlTableById(
+        connectionId,
+        tableName,
+        normalized,
+      );
       if (result.success) {
         toast.success(result.message ?? "Table created successfully");
         setTable("");
@@ -206,18 +238,20 @@ export function CreateTableDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Input
-                    type="number"
-                    placeholder="Length"
-                    value={col.length || ""}
-                    onChange={(e) =>
-                      handleChange(
-                        idx,
-                        "length",
-                        e.target.value ? parseInt(e.target.value) : undefined,
-                      )
-                    }
-                  />
+                  {["varchar", "char"].includes(col.type) && (
+                    <Input
+                      type="number"
+                      placeholder="Length"
+                      value={col.length || ""}
+                      onChange={(e) =>
+                        handleChange(
+                          idx,
+                          "length",
+                          e.target.value ? parseInt(e.target.value) : undefined,
+                        )
+                      }
+                    />
+                  )}
                 </div>
                 <div className="flex gap-4 items-center flex-wrap">
                   <Checkbox
