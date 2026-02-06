@@ -7,7 +7,6 @@ import {
   Pencil,
   PlusCircle,
   RotateCw,
-  Search,
   Trash2,
   X,
   Check,
@@ -73,7 +72,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { ConnectionSummary, TableSchema } from "@/types/connection";
+import { ConnectionSummary, TableFilter, TableSchema } from "@/types/connection";
 import { getConnectionMeta } from "@/app/actions/connection";
 import {
   getTableDataById,
@@ -115,13 +114,27 @@ export function TableViewer() {
     isBulk: boolean;
   }>({ open: false, rowIds: [], isBulk: false });
 
-  const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [filters, setFilters] = useState<
+    Array<TableFilter & { id: string }>
+  >([]);
+  const [filterId, setFilterId] = useState(0);
+  const [debouncedFilters, setDebouncedFilters] = useState<
+    Array<TableFilter & { id: string }>
+  >([]);
+  const lastAppliedFiltersRef = React.useRef<string>("[]");
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [filters]);
 
   const fetchTableData = useCallback(async () => {
     if (!tableName) {
@@ -137,13 +150,35 @@ export function TableViewer() {
       if (!meta.success || !meta.connection) throw new Error("Connection not found.");
       setConnection(meta.connection);
 
+      const activeFilters = debouncedFilters
+        .filter((f) => f.column && f.op)
+        .filter((f) =>
+          ["is_null", "is_not_null", "exists", "not_exists"].includes(f.op)
+            ? true
+            : (f.value ?? "") !== ""
+        );
+
+      const appliedKey = JSON.stringify(activeFilters);
+      const lastAppliedKey = lastAppliedFiltersRef.current;
+
+      if (
+        activeFilters.length === 0 &&
+        lastAppliedKey === "[]" &&
+        debouncedFilters.length > 0
+      ) {
+        // User is still editing an empty filter; don't refetch yet.
+        return;
+      }
+
       const result = await getTableDataById(
         connectionId,
         tableName,
         schema ? schema : undefined,
         currentPage,
         rowsPerPage,
+        activeFilters,
       );
+      lastAppliedFiltersRef.current = appliedKey;
       if (result.success && result.data) {
         setTableData(result.data as Record<string, unknown>[]);
         setTotalPages(result.totalPages);
@@ -158,7 +193,7 @@ export function TableViewer() {
       setLoadingData(false);
       setSelectedRows([]);
     }
-  }, [connectionId, tableName, schema, currentPage, rowsPerPage]);
+  }, [connectionId, tableName, schema, currentPage, rowsPerPage, debouncedFilters]);
   const fetchTableSchema = useCallback(async () => {
     if (!connectionId || !tableName) {
       setLoading(false);
@@ -224,19 +259,10 @@ export function TableViewer() {
 
   const processedData = useMemo(() => {
     let filteredData = [...tableData];
-    if (searchTerm) {
-      filteredData = filteredData.filter((row) =>
-        Object.values(row).some((value) =>
-          String(value).toLowerCase().includes(searchTerm.toLowerCase()),
-        ),
-      );
-    }
-
     if (sortConfig !== null) {
       filteredData.sort((a, b) => {
         const valA = a[sortConfig.key];
         const valB = b[sortConfig.key];
-        // Convert unknowns to string for comparison
         const aComp = valA === null || valA === undefined ? "" : String(valA);
         const bComp = valB === null || valB === undefined ? "" : String(valB);
         if (aComp < bComp) return sortConfig.direction === "asc" ? -1 : 1;
@@ -245,7 +271,82 @@ export function TableViewer() {
       });
     }
     return filteredData;
-  }, [tableData, searchTerm, sortConfig]);
+  }, [tableData, sortConfig]);
+
+  const availableColumns = useMemo(() => {
+    if (tableSchema?.columns?.length) {
+      return tableSchema.columns.map((c) => c.columnName);
+    }
+    if (connection?.type === "mongodb" && tableData.length > 0) {
+      const keys = new Set<string>();
+      Object.keys(tableData[0] ?? {}).forEach((k) => keys.add(k));
+      return Array.from(keys);
+    }
+    return [];
+  }, [tableSchema, connection?.type, tableData]);
+
+  const sqlOperators = [
+    { value: "eq", label: "=" },
+    { value: "neq", label: "!=" },
+    { value: "gt", label: ">" },
+    { value: "gte", label: ">=" },
+    { value: "lt", label: "<" },
+    { value: "lte", label: "<=" },
+    { value: "contains", label: "contains" },
+    { value: "starts_with", label: "starts with" },
+    { value: "ends_with", label: "ends with" },
+    { value: "is_null", label: "is null" },
+    { value: "is_not_null", label: "is not null" },
+  ];
+
+  const mongoOperators = [
+    { value: "eq", label: "=" },
+    { value: "neq", label: "!=" },
+    { value: "gt", label: ">" },
+    { value: "gte", label: ">=" },
+    { value: "lt", label: "<" },
+    { value: "lte", label: "<=" },
+    { value: "contains", label: "contains" },
+    { value: "starts_with", label: "starts with" },
+    { value: "ends_with", label: "ends with" },
+    { value: "exists", label: "exists" },
+    { value: "not_exists", label: "not exists" },
+    { value: "is_null", label: "is null" },
+    { value: "is_not_null", label: "is not null" },
+  ];
+
+  const operators =
+    connection?.type === "mongodb" ? mongoOperators : sqlOperators;
+
+  const addFilter = () => {
+    const nextId = filterId + 1;
+    setFilterId(nextId);
+    setFilters((prev) => [
+      ...prev,
+      { id: `f-${nextId}`, column: "", op: "eq", value: "" },
+    ]);
+    setCurrentPage(1);
+  };
+
+  const updateFilter = (
+    id: string,
+    patch: Partial<TableFilter & { id: string }>,
+  ) => {
+    setFilters((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    );
+    setCurrentPage(1);
+  };
+
+  const removeFilter = (id: string) => {
+    setFilters((prev) => prev.filter((f) => f.id !== id));
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setFilters([]);
+    setCurrentPage(1);
+  };
 
   const paginatedData = useMemo(() => tableData, [tableData]);
 
@@ -372,6 +473,96 @@ export function TableViewer() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto">
+          <div className="flex flex-col gap-3 pb-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={addFilter}
+                disabled={availableColumns.length === 0}
+              >
+                Add Filter
+              </Button>
+              {filters.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+            {filters.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {filters.map((filter) => {
+                  const hideValue = [
+                    "is_null",
+                    "is_not_null",
+                    "exists",
+                    "not_exists",
+                  ].includes(filter.op);
+                  return (
+                    <div
+                      key={filter.id}
+                      className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center"
+                    >
+                      <Select
+                        value={filter.column}
+                        onValueChange={(value) =>
+                          updateFilter(filter.id, { column: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Field" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableColumns.map((col) => (
+                            <SelectItem key={col} value={col}>
+                              {col}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={filter.op}
+                        onValueChange={(value) =>
+                          updateFilter(filter.id, { op: value as any })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Operator" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {operators.map((op) => (
+                            <SelectItem key={op.value} value={op.value}>
+                              {op.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {hideValue ? (
+                        <div className="text-sm text-muted-foreground">
+                          No value
+                        </div>
+                      ) : (
+                        <Input
+                          placeholder="Value"
+                          value={filter.value ?? ""}
+                          onChange={(e) =>
+                            updateFilter(filter.id, { value: e.target.value })
+                          }
+                        />
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFilter(filter.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <JsonViewer
             data={tableData}
             connectionId={connectionId!}
@@ -462,18 +653,101 @@ export function TableViewer() {
           </CardDescription>
         </CardHeader>
 
-        <div className="flex items-center justify-between gap-2 px-6 pb-4">
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search data..."
-                className="pl-8 w-64"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+        <div className="flex flex-col gap-3 px-6 pb-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={addFilter}
+                disabled={availableColumns.length === 0}
+              >
+                Add Filter
+              </Button>
+              {filters.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                >
+                  Clear Filters
+                </Button>
+              )}
             </div>
           </div>
+          {filters.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {filters.map((filter) => {
+                const hideValue = [
+                  "is_null",
+                  "is_not_null",
+                  "exists",
+                  "not_exists",
+                ].includes(filter.op);
+                return (
+                  <div
+                    key={filter.id}
+                    className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center"
+                  >
+                    <Select
+                      value={filter.column}
+                      onValueChange={(value) =>
+                        updateFilter(filter.id, { column: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableColumns.map((col) => (
+                          <SelectItem key={col} value={col}>
+                            {col}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={filter.op}
+                      onValueChange={(value) =>
+                        updateFilter(filter.id, { op: value as any })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Operator" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operators.map((op) => (
+                          <SelectItem key={op.value} value={op.value}>
+                            {op.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {hideValue ? (
+                      <div className="text-sm text-muted-foreground">
+                        No value
+                      </div>
+                    ) : (
+                      <Input
+                        placeholder="Value"
+                        value={filter.value ?? ""}
+                        onChange={(e) =>
+                          updateFilter(filter.id, { value: e.target.value })
+                        }
+                      />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFilter(filter.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             {selectedRows.length > 0 && (
               <Button

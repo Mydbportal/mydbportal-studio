@@ -1,7 +1,7 @@
 "use server";
 
 import { mgConnector } from "@/lib/adapters/mongo";
-import { Connection } from "@/types/connection";
+import { Connection, TableFilter } from "@/types/connection";
 import { ObjectId } from "mongodb";
 import { getConnectionById } from "@/lib/server/connection-vault";
 
@@ -110,11 +110,13 @@ export async function getCollectionDocs({
   page = 1,
   pagesize = 10,
   connection,
+  filters = [],
 }: {
   collection: string;
   page?: number;
   pagesize?: number;
   connection: Connection;
+  filters?: TableFilter[];
 }): Promise<{
   success: boolean;
   data?: Record<string, unknown>[];
@@ -138,9 +140,10 @@ export async function getCollectionDocs({
     const offset = (page - 1) * pagesize;
     const db = client.db(connection.database);
     const col = db.collection(collection);
-    const total = await col.countDocuments({});
+    const query = buildMongoQuery(filters);
+    const total = await col.countDocuments(query);
     const totalPages = Math.ceil(total / pagesize);
-    const docs = await col.find().skip(offset).limit(pagesize).toArray();
+    const docs = await col.find(query).skip(offset).limit(pagesize).toArray();
 
     return {
       success: true,
@@ -172,6 +175,82 @@ export async function getCollectionDocs({
       });
     }
   }
+}
+
+function buildMongoQuery(filters: TableFilter[]) {
+  const clauses: Record<string, any>[] = [];
+
+  const coerceValue = (val?: string) => {
+    if (val === undefined) return val;
+    const trimmed = val.trim();
+    if (trimmed === "") return val;
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+    const num = Number(trimmed);
+    if (!Number.isNaN(num) && trimmed === String(num)) return num;
+    return val;
+  };
+
+  filters.forEach((f) => {
+    if (!f.column) return;
+    const value = coerceValue(f.value);
+    switch (f.op) {
+      case "eq":
+        clauses.push({ [f.column]: value ?? null });
+        break;
+      case "neq":
+        clauses.push({ [f.column]: { $ne: value ?? null } });
+        break;
+      case "gt":
+        clauses.push({ [f.column]: { $gt: value } });
+        break;
+      case "gte":
+        clauses.push({ [f.column]: { $gte: value } });
+        break;
+      case "lt":
+        clauses.push({ [f.column]: { $lt: value } });
+        break;
+      case "lte":
+        clauses.push({ [f.column]: { $lte: value } });
+        break;
+      case "contains":
+        clauses.push({
+          [f.column]: { $regex: f.value ?? "", $options: "i" },
+        });
+        break;
+      case "starts_with":
+        clauses.push({
+          [f.column]: { $regex: `^${escapeRegex(f.value ?? "")}`, $options: "i" },
+        });
+        break;
+      case "ends_with":
+        clauses.push({
+          [f.column]: { $regex: `${escapeRegex(f.value ?? "")}$`, $options: "i" },
+        });
+        break;
+      case "exists":
+        clauses.push({ [f.column]: { $exists: true } });
+        break;
+      case "not_exists":
+        clauses.push({ [f.column]: { $exists: false } });
+        break;
+      case "is_null":
+        clauses.push({ [f.column]: null });
+        break;
+      case "is_not_null":
+        clauses.push({ [f.column]: { $ne: null } });
+        break;
+      default:
+        break;
+    }
+  });
+
+  if (clauses.length === 0) return {};
+  return { $and: clauses };
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export async function getCollectionDocsById({

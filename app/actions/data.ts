@@ -5,6 +5,7 @@ import {
   TableSchema,
   TableColumn,
   CrudResult,
+  TableFilter,
 } from "@/types/connection";
 import { deleteDoc, getCollectionDocs, insertDoc, updateDoc } from "./mongo";
 import {
@@ -36,11 +37,18 @@ export async function getTableData(
 
   Schema?: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  filters: TableFilter[] = [],
 ): Promise<GetTableDataResult> {
   try {
     if (connection.type === "mysql") {
-      const result = await getMysqlData(connection, tableName, page, pageSize);
+      const result = await getMysqlData(
+        connection,
+        tableName,
+        page,
+        pageSize,
+        filters,
+      );
       if (result.success) {
         return {
           success: true,
@@ -78,6 +86,7 @@ export async function getTableData(
         schema: Schema,
         limit: pageSize,
         page,
+        filters,
       });
 
       if (!dataResult.success || !dataResult.rows) {
@@ -97,6 +106,7 @@ export async function getTableData(
           connection,
           page,
           pagesize: pageSize,
+          filters,
         });
         if (result.success) {
           return {
@@ -134,10 +144,11 @@ export async function getTableDataById(
   tableName: string,
   schema?: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  filters: TableFilter[] = [],
 ): Promise<GetTableDataResult> {
   const connection = getConnectionById(connectionId);
-  return getTableData(connection, tableName, schema, page, pageSize);
+  return getTableData(connection, tableName, schema, page, pageSize, filters);
 }
 
 export async function insertRow(

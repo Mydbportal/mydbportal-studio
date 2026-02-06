@@ -2,7 +2,7 @@
 
 import { pgConnector } from "@/lib/adapters/postgres";
 import { buildSQLFragment } from "@/lib/helpers/helpers";
-import { ColumnOptions, Connection } from "@/types/connection";
+import { ColumnOptions, Connection, TableFilter } from "@/types/connection";
 import { getConnectionById } from "@/lib/server/connection-vault";
 
 interface CountRow {
@@ -256,12 +256,14 @@ export async function getTableDatas({
   schema,
   limit = 20,
   page = 1,
+  filters = [],
 }: {
   connection: Connection;
   tableName: string;
   schema?: string;
   limit?: number;
   page?: number;
+  filters?: TableFilter[];
 }): Promise<{
   success: boolean;
   rows?: Record<string, unknown>[];
@@ -289,15 +291,19 @@ export async function getTableDatas({
       ? `"${schema}"."${tableName}"`
       : `"${tableName}"`;
 
-    const query = `SELECT COUNT(*)::int AS total FROM ${fullTableName}`;
+    const { whereSql, params } = buildPostgresWhere(filters);
 
-    const { rows } = await client.query<CountRow>(query);
+    const query = `SELECT COUNT(*)::int AS total FROM ${fullTableName}${whereSql}`;
+
+    const { rows } = await client.query<CountRow>(query, params);
 
     const totalPages: number = Math.ceil(rows[0]?.total / limit);
 
     const response = await client.query<Record<string, unknown>>(
-      `SELECT * FROM ${fullTableName} LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      `SELECT * FROM ${fullTableName}${whereSql} LIMIT $${params.length + 1} OFFSET $${
+        params.length + 2
+      }`,
+      [...params, limit, offset]
     );
 
     return { success: true, rows: response.rows, totalPages };
@@ -331,6 +337,73 @@ export async function getTableDatas({
       });
     }
   }
+}
+
+function buildPostgresWhere(filters: TableFilter[]) {
+  const clauses: string[] = [];
+  const params: Array<string | number | boolean | null> = [];
+  const isValidIdent = (name: string) =>
+    /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+  const quoteIdent = (ident: string) => `"${ident.replace(/\"/g, '\"\"')}"`;
+
+  filters.forEach((f) => {
+    if (!f.column || !isValidIdent(f.column)) return;
+    const col = quoteIdent(f.column);
+    const nextParam = () => `$${params.length + 1}`;
+
+    switch (f.op) {
+      case "eq":
+        clauses.push(`${col} = ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "neq":
+        clauses.push(`${col} != ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "gt":
+        clauses.push(`${col} > ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "gte":
+        clauses.push(`${col} >= ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "lt":
+        clauses.push(`${col} < ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "lte":
+        clauses.push(`${col} <= ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "contains":
+        clauses.push(`${col} ILIKE ${nextParam()}`);
+        params.push(`%${f.value ?? ""}%`);
+        break;
+      case "starts_with":
+        clauses.push(`${col} ILIKE ${nextParam()}`);
+        params.push(`${f.value ?? ""}%`);
+        break;
+      case "ends_with":
+        clauses.push(`${col} ILIKE ${nextParam()}`);
+        params.push(`%${f.value ?? ""}`);
+        break;
+      case "is_null":
+        clauses.push(`${col} IS NULL`);
+        break;
+      case "is_not_null":
+        clauses.push(`${col} IS NOT NULL`);
+        break;
+      default:
+        break;
+    }
+  });
+
+  if (clauses.length === 0) {
+    return { whereSql: "", params: [] as Array<string | number | boolean | null> };
+  }
+
+  return { whereSql: ` WHERE ${clauses.join(" AND ")}`, params };
 }
 
 export async function insertDatas(

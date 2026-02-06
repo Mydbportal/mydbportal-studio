@@ -11,6 +11,7 @@ import {
   Connection,
   TableColumn,
   TableSchema,
+  TableFilter,
 } from "@/types/connection";
 import { RowDataPacket } from "mysql2";
 import { getConnectionById } from "@/lib/server/connection-vault";
@@ -24,6 +25,7 @@ export async function getMysqlData(
   tableName: string,
   page: number = 1,
   pageSize: number = 20,
+  filters: TableFilter[] = [],
 ): Promise<{
   success: boolean;
   data?: Record<string, unknown>[];
@@ -71,8 +73,11 @@ export async function getMysqlData(
 
     const schema: TableSchema = { tableName, columns };
 
+    const { whereSql, params } = buildMysqlWhere(filters);
+
     const [countRows] = await mysqlConnection.execute<CountRow[]>(
-      `SELECT COUNT(*) as total FROM \`${tableName}\``,
+      `SELECT COUNT(*) as total FROM \`${tableName}\`${whereSql}`,
+      params,
     );
 
     const totalPages: number = Math.ceil(countRows[0]?.total / pageSize);
@@ -82,9 +87,8 @@ export async function getMysqlData(
 
     // Fetch data with pagination
     const [dataRows] = await mysqlConnection.query(
-      `SELECT * FROM \`${tableName}\` LIMIT ${Number(pageSize)} OFFSET ${Number(
-        offset,
-      )}`,
+      `SELECT * FROM \`${tableName}\`${whereSql} LIMIT ? OFFSET ?`,
+      [...params, Number(pageSize), Number(offset)],
     );
 
     return {
@@ -119,6 +123,71 @@ export async function getMysqlData(
       });
     }
   }
+}
+
+function buildMysqlWhere(filters: TableFilter[]) {
+  const clauses: string[] = [];
+  const params: Array<string | number | boolean | null> = [];
+  const isValidIdent = (name: string) =>
+    /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+
+  filters.forEach((f) => {
+    if (!f.column || !isValidIdent(f.column)) return;
+    const col = `\`${f.column}\``;
+
+    switch (f.op) {
+      case "eq":
+        clauses.push(`${col} = ?`);
+        params.push(f.value ?? "");
+        break;
+      case "neq":
+        clauses.push(`${col} != ?`);
+        params.push(f.value ?? "");
+        break;
+      case "gt":
+        clauses.push(`${col} > ?`);
+        params.push(f.value ?? "");
+        break;
+      case "gte":
+        clauses.push(`${col} >= ?`);
+        params.push(f.value ?? "");
+        break;
+      case "lt":
+        clauses.push(`${col} < ?`);
+        params.push(f.value ?? "");
+        break;
+      case "lte":
+        clauses.push(`${col} <= ?`);
+        params.push(f.value ?? "");
+        break;
+      case "contains":
+        clauses.push(`${col} LIKE ?`);
+        params.push(`%${f.value ?? ""}%`);
+        break;
+      case "starts_with":
+        clauses.push(`${col} LIKE ?`);
+        params.push(`${f.value ?? ""}%`);
+        break;
+      case "ends_with":
+        clauses.push(`${col} LIKE ?`);
+        params.push(`%${f.value ?? ""}`);
+        break;
+      case "is_null":
+        clauses.push(`${col} IS NULL`);
+        break;
+      case "is_not_null":
+        clauses.push(`${col} IS NOT NULL`);
+        break;
+      default:
+        break;
+    }
+  });
+
+  if (clauses.length === 0) {
+    return { whereSql: "", params: [] as Array<string | number | boolean | null> };
+  }
+
+  return { whereSql: ` WHERE ${clauses.join(" AND ")}`, params };
 }
 
 export async function insertMysqlRaw(
