@@ -14,12 +14,14 @@ interface JsonViewerProps {
   data: any;
   connectionId: string;
   tableName: string;
+  onRefresh?: () => void;
 }
 
 const JsonViewer: React.FC<JsonViewerProps> = ({
   data,
   connectionId,
   tableName,
+  onRefresh,
 }) => {
   const [mounted, SetMounted] = useState(false);
 
@@ -38,6 +40,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
         });
         if (result.success) {
           toast.success(result.message ?? "Document inserted");
+          onRefresh?.();
         } else {
           toast.error(result.message ?? "Failed to insert document");
         }
@@ -47,6 +50,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
         });
         if (result.success) {
           toast.success(result.message);
+          onRefresh?.();
         } else {
           toast.error(result.message);
         }
@@ -74,6 +78,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
         );
         if (result.success) {
           toast.success(result.message ?? "Field removed");
+          onRefresh?.();
         } else {
           toast.error(result.message ?? "Failed to remove field");
         }
@@ -86,6 +91,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
         const result = await deleteRowById(connectionId, tableName, "_id", docId);
         if (result.success) {
           toast.success(result.message ?? "Doc deleted successfully");
+          onRefresh?.();
         } else {
           toast.error(result.message ?? "Failed to delete doc");
         }

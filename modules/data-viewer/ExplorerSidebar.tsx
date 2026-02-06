@@ -45,6 +45,8 @@ export function ExplorerSidebar() {
   const [activeTable, setActiveTable] = useState(tableName || "");
   const [loadingTables, setLoadingTables] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [schemaTick, setSchemaTick] = useState(0);
 
   // Filter tables efficiently
   const filteredTables = useMemo(() => {
@@ -99,7 +101,7 @@ export function ExplorerSidebar() {
     };
 
     fetchSchemas();
-  }, [connected, connectionId]);
+  }, [connected, connectionId, schemaTick]);
 
   // Load tables whenever connection or schema changes
   useEffect(() => {
@@ -130,7 +132,15 @@ export function ExplorerSidebar() {
     };
 
     fetchTables();
-  }, [connected, selectedSchema, connectionId]);
+  }, [connected, selectedSchema, connectionId, refreshTick]);
+
+  const handleTablesChanged = () => {
+    setRefreshTick((t) => t + 1);
+  };
+
+  const handleSchemasChanged = () => {
+    setSchemaTick((t) => t + 1);
+  };
 
   return (
     <div className="flex h-full flex-col gap-4 px-2 py-4 w-full">
@@ -179,6 +189,8 @@ export function ExplorerSidebar() {
                 connection={connected}
                 connectionId={connectionId}
                 schema={selectedSchema}
+                onTablesChanged={handleTablesChanged}
+                onSchemasChanged={handleSchemasChanged}
               />
             )}
           </div>
@@ -247,6 +259,7 @@ export function ExplorerSidebar() {
                           connectionType={connected.type}
                           tableName={table.name}
                           schema={selectedSchema}
+                          onSuccess={handleTablesChanged}
                         />
                       )}
                     </div>

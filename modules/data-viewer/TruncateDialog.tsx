@@ -20,10 +20,12 @@ function TruncateTrigger({
   connectionId,
   connectionType,
   tableName,
+  onSuccess,
 }: {
   connectionId: string;
   connectionType: "postgresql" | "mysql" | "mongodb";
   tableName: string;
+  onSuccess?: () => void;
 }) {
   const [input, setInput] = useState<string>("");
   const [confirmed, setConfirmed] = useState<boolean>(false);
@@ -37,6 +39,7 @@ function TruncateTrigger({
       const result = await truncateMysqlTableById(connectionId, tableName);
       if (result.success) {
         toast.success(result.message ?? "Table truncated successfully");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "Failed to truncate table");
       }
@@ -44,6 +47,7 @@ function TruncateTrigger({
       const result = await truncatePgTableById(connectionId, tableName);
       if (result.success) {
         toast.success(result.message ?? "Table truncated successfully");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "Failed to truncate table");
       }

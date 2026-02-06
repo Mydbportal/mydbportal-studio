@@ -20,11 +20,13 @@ function DeleteTriger({
   connectionType,
   tableName,
   schema,
+  onSuccess,
 }: {
   connectionId: string;
   connectionType: "postgresql" | "mysql" | "mongodb";
   tableName: string;
   schema?: string;
+  onSuccess?: () => void;
 }) {
   const [table, setTable] = useState<string>();
   const [confirmed, setConfirmed] = useState<boolean>(false);
@@ -39,6 +41,7 @@ function DeleteTriger({
       const result = await deleteCollectionsById(connectionId, tableName);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "Failed to delete collection");
       }
@@ -46,6 +49,7 @@ function DeleteTriger({
       const result = await deleteMysqlTableById(connectionId, tableName);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "Failed to delete collection");
       }
@@ -53,6 +57,7 @@ function DeleteTriger({
       const result = await deletePgTableById(connectionId, tableName, schema);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "Failed to delete collection");
       }
