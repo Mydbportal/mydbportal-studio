@@ -313,7 +313,6 @@ export async function addMysqlColumn(
         "mysql",
       );
       const query = `ALTER TABLE \`${tableName}\` ADD COLUMN ${fragment}`;
-      console.log("[mysql] add column query:", query);
       await client.query(query);
     }
 
@@ -378,7 +377,6 @@ export async function createMysqlTable(
     });
 
     const query = buildCreateMysqlTableSQL(safeColumns, tableName);
-    console.log("[mysql] create table query:", query);
     await client.execute(query);
 
     return { success: true, message: "Table created successfully." };
