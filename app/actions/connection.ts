@@ -4,13 +4,8 @@ import { Connection } from "@/types/connection";
 import mysql from "mysql2/promise";
 import { Client as PgClient } from "pg";
 import { MongoClient } from "mongodb";
-import {
-  deleteConnection as deleteVaultConnection,
-  getConnectionSummary,
-  listConnections as listVaultConnections,
-  storeConnection,
-} from "@/lib/server/connection-vault";
-import type { ConnectionSummary } from "@/types/connection";
+import { encryptString } from "@/lib/server/crypto";
+
 
 export async function testConnection(
   connection: Partial<Connection>
@@ -81,60 +76,38 @@ export async function testConnection(
   }
 }
 
-export async function createConnection(
+export async function encryptConnectionPayload(
   connection: Partial<Connection>
-): Promise<{ success: boolean; connection?: ConnectionSummary; message?: string }> {
-  try {
-    const created = storeConnection(connection);
-    return { success: true, connection: created };
-  } catch (error) {
-    return {
-      success: false,
-      message: (error as Error).message ?? "Failed to create connection.",
-    };
+): Promise<{ success: boolean; encryptedCredentials?: string; message?: string }> {
+  if (!connection.name) {
+    return { success: false, message: "Connection name is required." };
   }
-}
+  if (!connection.type) {
+    return { success: false, message: "Connection type is required." };
+  }
+  if (!connection.host) {
+    return { success: false, message: "Host is required." };
+  }
+  if (!connection.user) {
+    return { success: false, message: "User is required." };
+  }
+  if (!connection.database) {
+    return { success: false, message: "Database is required." };
+  }
+  if (!connection.password) {
+    return { success: false, message: "Password is required." };
+  }
 
-export async function listConnections(): Promise<{
-  success: boolean;
-  connections?: ConnectionSummary[];
-  message?: string;
-}> {
-  try {
-    return { success: true, connections: listVaultConnections() };
-  } catch (error) {
-    return {
-      success: false,
-      message: (error as Error).message ?? "Failed to list connections.",
-    };
+  if (connection.type === "mongodb" && !connection.protocol) {
+    connection.protocol = "mongodb";
   }
-}
 
-export async function removeConnection(
-  id: string
-): Promise<{ success: boolean; message?: string }> {
-  try {
-    deleteVaultConnection(id);
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      message: (error as Error).message ?? "Failed to delete connection.",
-    };
-  }
-}
+  const encryptedCredentials = encryptString(
+    JSON.stringify({
+      password: connection.password ?? "",
+      filepath: connection.filepath ?? "",
+    })
+  );
 
-export async function getConnectionMeta(id: string): Promise<{
-  success: boolean;
-  connection?: ConnectionSummary | null;
-  message?: string;
-}> {
-  try {
-    return { success: true, connection: getConnectionSummary(id) };
-  } catch (error) {
-    return {
-      success: false,
-      message: (error as Error).message ?? "Failed to load connection.",
-    };
-  }
+  return { success: true, encryptedCredentials };
 }

@@ -3,7 +3,7 @@
 import { pgConnector } from "@/lib/adapters/postgres";
 import { buildSQLFragment } from "@/lib/helpers/helpers";
 import { ColumnOptions, Connection, TableFilter } from "@/types/connection";
-import { getConnectionById } from "@/lib/server/connection-vault";
+import { decryptString } from "@/lib/server/crypto";
 
 interface CountRow {
   total: number;
@@ -57,9 +57,25 @@ export async function getSchemas(connection: Connection): Promise<{
   }
 }
 
-export async function getSchemasById(connectionId: string) {
-  const connection = getConnectionById(connectionId);
-  return getSchemas(connection);
+function inflateEncryptedConnection(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+): Connection {
+  const decrypted = JSON.parse(
+    decryptString(connection.encryptedCredentials)
+  );
+  return {
+    ...connection,
+    password: decrypted.password ?? "",
+    filepath: decrypted.filepath ?? "",
+    encryptedCredentials: connection.encryptedCredentials,
+  };
+}
+
+export async function getSchemasEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+) {
+  const full = inflateEncryptedConnection(connection);
+  return getSchemas(full);
 }
 
 export async function getPgTableNames(
@@ -139,12 +155,12 @@ export async function getPgTableNames(
   }
 }
 
-export async function getPgTableNamesById(
-  connectionId: string,
+export async function getPgTableNamesEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return getPgTableNames(connection, schema);
+  const full = inflateEncryptedConnection(connection);
+  return getPgTableNames(full, schema);
 }
 
 export async function getTableColumns(
@@ -686,13 +702,13 @@ export async function createTable(
   }
 }
 
-export async function createTableById(
-  connectionId: string,
+export async function createTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return createTable(connection, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return createTable(full, tableName, schema);
 }
 
 export async function addPostgresColumn(
@@ -758,14 +774,14 @@ export async function addPostgresColumn(
   }
 }
 
-export async function addPostgresColumnById(
-  connectionId: string,
+export async function addPostgresColumnEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   columns: ColumnOptions[],
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return addPostgresColumn(connection, columns, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return addPostgresColumn(full, columns, tableName, schema);
 }
 
 export async function createSchema(
@@ -818,9 +834,12 @@ export async function createSchema(
   }
 }
 
-export async function createSchemaById(connectionId: string, schema: string) {
-  const connection = getConnectionById(connectionId);
-  return createSchema(connection, schema);
+export async function createSchemaEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
+  schema: string
+) {
+  const full = inflateEncryptedConnection(connection);
+  return createSchema(full, schema);
 }
 
 export async function deletePgTable(
@@ -879,13 +898,13 @@ export async function deletePgTable(
   }
 }
 
-export async function deletePgTableById(
-  connectionId: string,
+export async function deletePgTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return deletePgTable(connection, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return deletePgTable(full, tableName, schema);
 }
 
 export async function truncatePgTable(
@@ -944,11 +963,11 @@ export async function truncatePgTable(
   }
 }
 
-export async function truncatePgTableById(
-  connectionId: string,
+export async function truncatePgTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return truncatePgTable(connection, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return truncatePgTable(full, tableName, schema);
 }

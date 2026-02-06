@@ -16,13 +16,13 @@ import { Input } from "@/components/ui/input";
 import { ConnectForm } from "../connection/ConnectForm";
 import { QueryEditorDialog } from "../master-console/QueryEditorDialog";
 import { ConnectionList } from "../connection/ConnectionList";
-import { getTablesById } from "@/app/actions/tables";
+import { getTablesEncrypted } from "@/app/actions/tables";
 import Link from "next/link";
-import { getSchemasById } from "@/app/actions/postgres";
-import { getConnectionMeta } from "@/app/actions/connection";
+import { getSchemasEncrypted } from "@/app/actions/postgres";
+import { getConnectionById } from "@/lib/connection-storage";
 
 import SchemaOptions from "./SchemaOptions";
-import { ConnectionSummary } from "@/types/connection";
+import { Connection, ConnectionSummary } from "@/types/connection";
 import {
   Select,
   SelectContent,
@@ -39,6 +39,7 @@ export function ExplorerSidebar() {
   const tableName = searchParams.get("table");
 
   const [connected, setConnected] = useState<ConnectionSummary | undefined>();
+  const [connectedFull, setConnectedFull] = useState<Connection | undefined>();
   const [schemas, setSchemas] = useState<string[]>([]);
   const [selectedSchema, setSelectedSchema] = useState<string>();
   const [tables, setTables] = useState<{ name: string; count: number }[]>([]);
@@ -66,15 +67,29 @@ export function ExplorerSidebar() {
     }
 
     const loadConnection = async () => {
-      const result = await getConnectionMeta(connectionId);
-      if (!result.success || !result.connection) {
+      const result = await getConnectionById(connectionId);
+      if (!result) {
         toast.error("Connection not found", {
           description: "The selected connection could not be found.",
         });
         setConnected(undefined);
+        setConnectedFull(undefined);
         return;
       }
-      setConnected(result.connection ?? undefined);
+      setConnected({
+        id: result.id,
+        name: result.name,
+        type: result.type,
+        host: result.host,
+        protocol: result.protocol ?? undefined,
+        search: result.search ?? undefined,
+        port: result.port ?? undefined,
+        user: result.user,
+        database: result.database,
+        filepath: result.filepath,
+        ssl: result.ssl,
+      });
+      setConnectedFull(result);
     };
 
     loadConnection();
@@ -89,8 +104,8 @@ export function ExplorerSidebar() {
     }
 
     const fetchSchemas = async () => {
-      if (!connectionId) return;
-      const schema = await getSchemasById(connectionId);
+      if (!connectedFull || !connectedFull.encryptedCredentials) return;
+      const schema = await getSchemasEncrypted(connectedFull);
       if (schema.success && schema.schemas && schema.schemas.length > 0) {
         setSchemas(schema.schemas);
         setSelectedSchema(schema.schemas[0]);
@@ -101,7 +116,7 @@ export function ExplorerSidebar() {
     };
 
     fetchSchemas();
-  }, [connected, connectionId, schemaTick]);
+  }, [connected, connectedFull, connectionId, schemaTick]);
 
   // Load tables whenever connection or schema changes
   useEffect(() => {
@@ -116,8 +131,8 @@ export function ExplorerSidebar() {
         tables?: { name: string; count: number }[];
         message?: string;
       } = { success: false, message: "Connection type not supported." };
-      if (connectionId) {
-        result = await getTablesById(connectionId, selectedSchema);
+      if (connectedFull && connectedFull.encryptedCredentials) {
+        result = await getTablesEncrypted(connectedFull, selectedSchema);
       }
       if (result.success && result.tables) {
         setTables(result.tables);
@@ -132,7 +147,7 @@ export function ExplorerSidebar() {
     };
 
     fetchTables();
-  }, [connected, selectedSchema, connectionId, refreshTick]);
+  }, [connected, connectedFull, selectedSchema, connectionId, refreshTick]);
 
   const handleTablesChanged = () => {
     setRefreshTick((t) => t + 1);

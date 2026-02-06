@@ -14,10 +14,24 @@ import {
   TableFilter,
 } from "@/types/connection";
 import { RowDataPacket } from "mysql2";
-import { getConnectionById } from "@/lib/server/connection-vault";
+import { decryptString } from "@/lib/server/crypto";
 
 interface CountRow extends RowDataPacket {
   total: number;
+}
+
+function inflateEncryptedConnection(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+): Connection {
+  const decrypted = JSON.parse(
+    decryptString(connection.encryptedCredentials)
+  );
+  return {
+    ...connection,
+    password: decrypted.password ?? "",
+    filepath: decrypted.filepath ?? "",
+    encryptedCredentials: connection.encryptedCredentials,
+  };
 }
 
 export async function getMysqlData(
@@ -409,13 +423,13 @@ export async function addMysqlColumn(
   }
 }
 
-export async function addMysqlColumnById(
-  connectionId: string,
+export async function addMysqlColumnEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   columns: ColumnOptions[],
   tableName: string,
 ) {
-  const connection = getConnectionById(connectionId);
-  return addMysqlColumn(connection, columns, tableName);
+  const full = inflateEncryptedConnection(connection);
+  return addMysqlColumn(full, columns, tableName);
 }
 
 export async function createMysqlTable(
@@ -475,13 +489,13 @@ export async function createMysqlTable(
   }
 }
 
-export async function createMysqlTableById(
-  connectionId: string,
+export async function createMysqlTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   columns: ColumnOptions[],
 ) {
-  const connection = getConnectionById(connectionId);
-  return createMysqlTable(connection, tableName, columns);
+  const full = inflateEncryptedConnection(connection);
+  return createMysqlTable(full, tableName, columns);
 }
 
 export async function truncateMysqlTable(
@@ -532,12 +546,12 @@ export async function truncateMysqlTable(
   }
 }
 
-export async function truncateMysqlTableById(
-  connectionId: string,
+export async function truncateMysqlTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
 ) {
-  const connection = getConnectionById(connectionId);
-  return truncateMysqlTable(connection, tableName);
+  const full = inflateEncryptedConnection(connection);
+  return truncateMysqlTable(full, tableName);
 }
 
 export async function deleteMysqlTable(
@@ -588,10 +602,10 @@ export async function deleteMysqlTable(
   }
 }
 
-export async function deleteMysqlTableById(
-  connectionId: string,
+export async function deleteMysqlTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
 ) {
-  const connection = getConnectionById(connectionId);
-  return deleteMysqlTable(connection, tableName);
+  const full = inflateEncryptedConnection(connection);
+  return deleteMysqlTable(full, tableName);
 }

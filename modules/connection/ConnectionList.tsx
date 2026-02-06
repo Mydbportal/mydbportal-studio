@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ConnectionSummary } from "@/types/connection";
-import { listConnections, removeConnection } from "@/app/actions/connection";
+import { removeConnection } from "@/lib/connection-actions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Trash2, Database, Loader2 } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { loadConnections } from "@/lib/connection-storage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,25 +32,28 @@ export function ConnectionList({
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchConnections = async () => {
-      if (!currentConnectionId) setLoading(true);
-      try {
-        const result = await listConnections();
-        if (result.success && result.connections) {
-          setConnections(result.connections);
-        } else {
-          throw new Error(result.message || "Failed to load connections.");
-        }
-      } catch {
-        toast.error("Error loading connections");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchConnections();
+  const liveConnections = useLiveQuery(async () => {
+    const items = await loadConnections();
+    return items.map((conn) => ({
+      id: conn.id,
+      name: conn.name,
+      type: conn.type,
+      host: conn.host,
+      protocol: conn.protocol ?? undefined,
+      search: conn.search ?? undefined,
+      port: conn.port ?? undefined,
+      user: conn.user,
+      database: conn.database,
+      filepath: conn.filepath,
+      ssl: conn.ssl,
+    }));
   }, [currentConnectionId]);
+
+  useEffect(() => {
+    if (!liveConnections) return;
+    setConnections(liveConnections);
+    setLoading(false);
+  }, [liveConnections]);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -57,8 +62,6 @@ export function ConnectionList({
       if (!result.success) {
         throw new Error(result.message || "Failed to delete connection.");
       }
-      const listResult = await listConnections();
-      setConnections(listResult.connections ?? []);
       toast.success("Connection Deleted");
 
       if (currentConnectionId === id) {

@@ -72,12 +72,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-import { ConnectionSummary, TableFilter, TableSchema } from "@/types/connection";
-import { getConnectionMeta } from "@/app/actions/connection";
 import {
-  getTableDataById,
-  updateRowById,
-  deleteRowById,
+  Connection,
+  ConnectionSummary,
+  TableFilter,
+  TableSchema,
+} from "@/types/connection";
+import { getConnectionById } from "@/lib/connection-storage";
+import {
+  getTableDataEncrypted,
+  updateRowEncrypted,
+  deleteRowEncrypted,
 } from "@/app/actions/data";
 import dynamic from "next/dynamic";
 import { AddRowDialog } from "./AddRowDialog";
@@ -93,6 +98,7 @@ export function TableViewer() {
   const schema = searchParams.get("schema");
 
   const [connection, setConnection] = useState<ConnectionSummary | null>(null);
+  const [connectionFull, setConnectionFull] = useState<Connection | null>(null);
   const [tableData, setTableData] = useState<Record<string, unknown>[]>([]);
   const [tableSchema, setTableSchema] = useState<TableSchema | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,9 +152,22 @@ export function TableViewer() {
     setError(null);
     try {
       if (!connectionId) throw new Error("Connection not found.");
-      const meta = await getConnectionMeta(connectionId);
-      if (!meta.success || !meta.connection) throw new Error("Connection not found.");
-      setConnection(meta.connection);
+      const full = await getConnectionById(connectionId);
+      if (!full) throw new Error("Connection not found.");
+      setConnection({
+        id: full.id,
+        name: full.name,
+        type: full.type,
+        host: full.host,
+        protocol: full.protocol ?? undefined,
+        search: full.search ?? undefined,
+        port: full.port ?? undefined,
+        user: full.user,
+        database: full.database,
+        filepath: full.filepath,
+        ssl: full.ssl,
+      });
+      setConnectionFull(full);
 
       const activeFilters = debouncedFilters
         .filter((f) => f.column && f.op)
@@ -170,8 +189,11 @@ export function TableViewer() {
         return;
       }
 
-      const result = await getTableDataById(
-        connectionId,
+      if (!full.encryptedCredentials) {
+        throw new Error("Connection credentials are missing.");
+      }
+      const result = await getTableDataEncrypted(
+        full,
         tableName,
         schema ? schema : undefined,
         currentPage,
@@ -205,12 +227,28 @@ export function TableViewer() {
     setError(null);
     try {
       if (!connectionId) throw new Error("Connection not found.");
-      const meta = await getConnectionMeta(connectionId);
-      if (!meta.success || !meta.connection) throw new Error("Connection not found.");
-      setConnection(meta.connection);
+      const full = await getConnectionById(connectionId);
+      if (!full) throw new Error("Connection not found.");
+      setConnection({
+        id: full.id,
+        name: full.name,
+        type: full.type,
+        host: full.host,
+        protocol: full.protocol ?? undefined,
+        search: full.search ?? undefined,
+        port: full.port ?? undefined,
+        user: full.user,
+        database: full.database,
+        filepath: full.filepath,
+        ssl: full.ssl,
+      });
+      setConnectionFull(full);
 
-      const result = await getTableDataById(
-        connectionId,
+      if (!full.encryptedCredentials) {
+        throw new Error("Connection credentials are missing.");
+      }
+      const result = await getTableDataEncrypted(
+        full,
         tableName,
         schema ? schema : undefined,
       );
@@ -362,17 +400,24 @@ export function TableViewer() {
   };
 
   const handleSaveEdit = async () => {
-    if (!connection || !connectionId || !tableName || !primaryKeyColumn || !editingRowId) return;
+    if (
+      !connectionFull ||
+      !connectionFull.encryptedCredentials ||
+      !tableName ||
+      !primaryKeyColumn ||
+      !editingRowId
+    )
+      return;
 
     try {
-    const result = await updateRowById(
-      connectionId!,
-      tableName,
-      primaryKeyColumn,
-      editingRowId,
-      editingRowData,
-      schema ? schema : undefined,
-    );
+      const result = await updateRowEncrypted(
+        connectionFull,
+        tableName,
+        primaryKeyColumn,
+        editingRowId,
+        editingRowData,
+        schema ? schema : undefined,
+      );
       if (result.success) {
         toast.success("Row Updated", { description: result.message });
         setEditingRowId(null);
@@ -398,12 +443,18 @@ export function TableViewer() {
   };
 
   const performDelete = async () => {
-    if (!connection || !connectionId || !tableName || !primaryKeyColumn) return;
+    if (
+      !connectionFull ||
+      !connectionFull.encryptedCredentials ||
+      !tableName ||
+      !primaryKeyColumn
+    )
+      return;
 
     const { rowIds } = deleteAlert;
     const promises = rowIds.map((id) =>
-      deleteRowById(
-        connectionId!,
+      deleteRowEncrypted(
+        connectionFull,
         tableName,
         primaryKeyColumn,
         id,

@@ -1,5 +1,5 @@
 "use client";
-import { createSchemaById } from "@/app/actions/postgres";
+import { createSchemaEncrypted } from "@/app/actions/postgres";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getConnectionById } from "@/lib/connection-storage";
 
 export function CreateSchemaDialog({
   connectionId,
@@ -23,7 +24,12 @@ export function CreateSchemaDialog({
 }) {
   const [schema, setSchema] = useState<string>("");
   const handleSubmit = async () => {
-    const results = await createSchemaById(connectionId, schema);
+    const connection = await getConnectionById(connectionId);
+    if (!connection || !connection.encryptedCredentials) {
+      toast.error("Connection not found");
+      return;
+    }
+    const results = await createSchemaEncrypted(connection, schema);
     if (results.success) {
       toast.success(results.message ?? "schema created successfully");
       onSuccess?.();

@@ -5,10 +5,15 @@ import JsonView from "react18-json-view";
 
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { jsonPayload } from "@/types/connection";
-import { deleteRowById, insertRowById, updateRowById } from "@/app/actions/data";
+import { Connection, jsonPayload } from "@/types/connection";
+import {
+  deleteRowEncrypted,
+  insertRowEncrypted,
+  updateRowEncrypted,
+} from "@/app/actions/data";
 import { buildFullPath } from "@/lib/helpers/helpers";
-import { unsetDocFieldById } from "@/app/actions/mongo";
+import { unsetDocFieldEncrypted } from "@/app/actions/mongo";
+import { getConnectionById } from "@/lib/connection-storage";
 
 interface JsonViewerProps {
   data: any;
@@ -24,8 +29,26 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
   onRefresh,
 }) => {
   const [mounted, SetMounted] = useState(false);
+  const [connection, setConnection] = useState<Connection | null>(null);
+
+  useEffect(() => {
+    const loadConnection = async () => {
+      const found = await getConnectionById(connectionId);
+      if (!found || !found.encryptedCredentials) {
+        toast.error("Connection not found");
+        setConnection(null);
+        return;
+      }
+      setConnection(found);
+    };
+    loadConnection();
+  }, [connectionId]);
 
   const handleEdit = async (params: any) => {
+    if (!connection) {
+      toast.error("Connection not found");
+      return;
+    }
     const { indexOrName, newValue, parentPath }: jsonPayload = params;
     const fullPath = await buildFullPath(indexOrName, parentPath);
 
@@ -35,7 +58,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
 
     try {
       if (!id) {
-        const result = await insertRowById(connectionId, tableName, {
+        const result = await insertRowEncrypted(connection, tableName, {
           [fullPath]: newValue,
         });
         if (result.success) {
@@ -45,9 +68,15 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
           toast.error(result.message ?? "Failed to insert document");
         }
       } else {
-        const result = await updateRowById(connectionId, tableName, "_id", id, {
+        const result = await updateRowEncrypted(
+          connection,
+          tableName,
+          "_id",
+          id,
+          {
           [fullPath]: newValue,
-        });
+          }
+        );
         if (result.success) {
           toast.success(result.message);
           onRefresh?.();
@@ -61,6 +90,10 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
   };
 
   const handleDelete = async (params: any) => {
+    if (!connection) {
+      toast.error("Connection not found");
+      return;
+    }
     const { indexOrName, value, parentPath }: jsonPayload = params;
     const fullPath = await buildFullPath(indexOrName, parentPath);
 
@@ -70,8 +103,8 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
 
     try {
       if (parentPath.length > 1) {
-        const result = await unsetDocFieldById(
-          connectionId,
+        const result = await unsetDocFieldEncrypted(
+          connection,
           tableName,
           id,
           fullPath,
@@ -88,7 +121,12 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
         if (!docId) {
           throw new Error("no _id present");
         }
-        const result = await deleteRowById(connectionId, tableName, "_id", docId);
+        const result = await deleteRowEncrypted(
+          connection,
+          tableName,
+          "_id",
+          docId
+        );
         if (result.success) {
           toast.success(result.message ?? "Doc deleted successfully");
           onRefresh?.();

@@ -1,7 +1,7 @@
 "use client";
-import { createCollectionById } from "@/app/actions/mongo";
-import { createMysqlTableById } from "@/app/actions/mysql";
-import { createTableById } from "@/app/actions/postgres";
+import { createCollectionEncrypted } from "@/app/actions/mongo";
+import { createMysqlTableEncrypted } from "@/app/actions/mysql";
+import { createTableEncrypted } from "@/app/actions/postgres";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -26,6 +26,7 @@ import { MYSQL_TYPES } from "@/lib/constants";
 import { ColumnOptions } from "@/types/connection";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getConnectionById } from "@/lib/connection-storage";
 
 export function CreateTableDialog({
   connectionId,
@@ -85,8 +86,13 @@ export function CreateTableDialog({
   };
 
   const handleSubmit = async () => {
+    const connection = await getConnectionById(connectionId);
+    if (!connection || !connection.encryptedCredentials) {
+      toast.error("Connection not found");
+      return;
+    }
     if (connectionType === "postgresql") {
-      const result = await createTableById(connectionId, table, schema);
+      const result = await createTableEncrypted(connection, table, schema);
       if (result.success) {
         toast.success(result.message ?? "Table create successfully");
         onSuccess?.();
@@ -94,7 +100,7 @@ export function CreateTableDialog({
         toast.error(result.message ?? "failed to create table");
       }
     } else if (connectionType === "mongodb") {
-      const result = await createCollectionById(connectionId, table);
+      const result = await createCollectionEncrypted(connection, table);
       if (result.success) {
         toast.success(result.message ?? "table created successfully ");
         onSuccess?.();
@@ -142,8 +148,8 @@ export function CreateTableDialog({
         type: col.type.toLowerCase(),
       }));
 
-      const result = await createMysqlTableById(
-        connectionId,
+      const result = await createMysqlTableEncrypted(
+        connection,
         tableName,
         normalized,
       );

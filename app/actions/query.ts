@@ -3,7 +3,7 @@
 import { mysqlConnector } from "@/lib/adapters/mysql";
 import { pgConnector } from "@/lib/adapters/postgres";
 import { Connection } from "@/types/connection";
-import { getConnectionById } from "@/lib/server/connection-vault";
+import { decryptString } from "@/lib/server/crypto";
 
 export async function executeQuery(
   connectionDetails: Connection,
@@ -38,7 +38,24 @@ export async function executeQuery(
   }
 }
 
-export async function executeQueryById(connectionId: string, query: string) {
-  const connection = getConnectionById(connectionId);
-  return executeQuery(connection, query);
+export async function executeEncryptedQuery(
+  connectionDetails: Omit<Connection, "password"> & {
+    encryptedCredentials: string;
+  },
+  query: string
+) {
+  try {
+    const decrypted = JSON.parse(
+      decryptString(connectionDetails.encryptedCredentials)
+    );
+    const fullConnection: Connection = {
+      ...connectionDetails,
+      password: decrypted.password ?? "",
+      filepath: decrypted.filepath ?? "",
+      encryptedCredentials: connectionDetails.encryptedCredentials,
+    };
+    return executeQuery(fullConnection, query);
+  } catch (error) {
+    return { error: (error as Error).message };
+  }
 }

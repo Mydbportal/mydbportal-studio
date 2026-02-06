@@ -1,107 +1,75 @@
-import { Connection } from "../types/connection";
-import { encrypt, decrypt } from "./crypto";
-import { v4 as uuidv4 } from "uuid";
+"use client";
+
+import { dexieDb } from "@/lib/dexie-db";
+import type { Connection } from "@/types/connection";
 
 const CONNECTIONS_STORAGE_KEY = "master_database_studio_connections";
+
+async function migrateLegacyStorage(): Promise<void> {
+  const existing = await dexieDb.connections.count();
+  if (existing > 0) return;
+
+  const storedConnections = localStorage.getItem(CONNECTIONS_STORAGE_KEY);
+  if (!storedConnections) return;
+
+  try {
+    const parsedConnections: Connection[] = JSON.parse(storedConnections);
+    if (parsedConnections.length > 0) {
+      await dexieDb.connections.bulkPut(parsedConnections);
+    }
+    localStorage.removeItem(CONNECTIONS_STORAGE_KEY);
+  } catch (error) {
+    console.error("Error migrating legacy connections:", error);
+  }
+}
 
 export async function saveConnections(
   connections: Connection[]
 ): Promise<void> {
-  const encryptedConnections = await Promise.all(
-    connections.map(async (conn) => {
-      const sensitiveData = JSON.stringify({
-        password: conn?.password,
-        filepath: conn?.filepath,
-      });
-      const encryptedSensitiveData = await encrypt(sensitiveData);
-      return {
-        ...conn,
-        encryptedCredentials: encryptedSensitiveData,
-        password: "",
-      };
-    })
-  );
-  localStorage.setItem(
-    CONNECTIONS_STORAGE_KEY,
-    JSON.stringify(encryptedConnections)
-  );
+  await migrateLegacyStorage();
+  await dexieDb.connections.clear();
+  await dexieDb.connections.bulkPut(connections);
 }
 
 export async function loadConnections(): Promise<Connection[]> {
-  const storedConnections = localStorage.getItem(CONNECTIONS_STORAGE_KEY);
-  if (!storedConnections) {
-    return [];
-  }
-
-  const parsedConnections: Connection[] = JSON.parse(storedConnections);
-
-  const decryptedConnections = await Promise.all(
-    parsedConnections.map(async (conn) => {
-      if (conn.encryptedCredentials) {
-        try {
-          const decryptedSensitiveData = await decrypt(
-            conn.encryptedCredentials
-          );
-          const sensitiveData = JSON.parse(decryptedSensitiveData);
-          return {
-            ...conn,
-            password: sensitiveData.password,
-            filepath: sensitiveData.filepath,
-          };
-        } catch (error) {
-          console.error("Error decrypting connection credentials:", error);
-
-          return { ...conn, password: "", filepath: "" };
-        }
-      }
-      return conn;
-    })
-  );
-
-  return decryptedConnections;
+  await migrateLegacyStorage();
+  return dexieDb.connections.toArray();
 }
 
 export async function addConnection(
-  newConnection: Partial<Connection>
-): Promise<Connection[]> {
-  const connections = await loadConnections();
+  newConnection: Connection
+): Promise<Connection> {
+  await migrateLegacyStorage();
+  await dexieDb.connections.put(newConnection);
+  return newConnection;
+}
 
-  const connectionWithId: Connection = {
-    id: uuidv4(),
-    name: newConnection.name ?? "",
-    type: newConnection.type ?? "mysql",
-    host: newConnection.host ?? "",
-    protocol: newConnection.protocol,
-    search: newConnection.search ?? "",
-    port: newConnection.port ?? 0,
-    user: newConnection.user ?? "",
-    password: newConnection.password ?? "",
-    database: newConnection.database ?? "",
-    filepath: newConnection.filepath ?? "",
-    encryptedCredentials: newConnection.encryptedCredentials ?? "",
-  };
-  const updatedConnections = [...connections, connectionWithId];
-  await saveConnections(updatedConnections);
-  return updatedConnections;
+export async function getConnectionById(
+  id: string
+): Promise<Connection | null> {
+  await migrateLegacyStorage();
+  const connections = await loadConnections();
+  return connections.find((conn) => conn.id === id) ?? null;
 }
 
 export async function deleteConnection(id: string): Promise<Connection[]> {
+  await migrateLegacyStorage();
   const connections = await loadConnections();
-  const updatedConnections = connections.filter((conn) => conn.id !== id);
-  await saveConnections(updatedConnections);
-  return updatedConnections;
+  await dexieDb.connections.delete(id);
+  return connections.filter((conn) => conn.id !== id);
 }
 
 export async function updateConnection(
   updatedConnection: Connection
 ): Promise<Connection[]> {
+  await migrateLegacyStorage();
   const connections = await loadConnections();
   const index = connections.findIndex(
     (conn) => conn.id === updatedConnection.id
   );
   if (index > -1) {
     connections[index] = updatedConnection;
-    await saveConnections(connections);
+    await dexieDb.connections.put(updatedConnection);
   }
   return connections;
 }
