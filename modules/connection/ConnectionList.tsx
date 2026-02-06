@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Connection } from "@/types/connection";
-import { loadConnections, deleteConnection } from "@/lib/connection-storage";
+import { ConnectionSummary } from "@/types/connection";
+import { listConnections, removeConnection } from "@/app/actions/connection";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Trash2, Database, Loader2 } from "lucide-react";
@@ -26,7 +26,7 @@ export function ConnectionList({
   currentConnectionId: string;
 }) {
   const router = useRouter();
-  const [connections, setConnections] = useState<Connection[]>([]);
+  const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -34,8 +34,12 @@ export function ConnectionList({
     const fetchConnections = async () => {
       if (!currentConnectionId) setLoading(true);
       try {
-        const storedConnections = await loadConnections();
-        setConnections(storedConnections);
+        const result = await listConnections();
+        if (result.success && result.connections) {
+          setConnections(result.connections);
+        } else {
+          throw new Error(result.message || "Failed to load connections.");
+        }
       } catch {
         toast.error("Error loading connections");
       } finally {
@@ -49,8 +53,12 @@ export function ConnectionList({
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      const updatedConnections = await deleteConnection(id);
-      setConnections(updatedConnections);
+      const result = await removeConnection(id);
+      if (!result.success) {
+        throw new Error(result.message || "Failed to delete connection.");
+      }
+      const listResult = await listConnections();
+      setConnections(listResult.connections ?? []);
       toast.success("Connection Deleted");
 
       if (currentConnectionId === id) {

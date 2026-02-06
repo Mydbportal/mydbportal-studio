@@ -1,5 +1,5 @@
 "use client";
-import { createSchema } from "@/app/actions/postgres";
+import { createSchemaById } from "@/app/actions/postgres";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,14 +11,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Connection } from "@/types/connection";
 import { useState } from "react";
 import { toast } from "sonner";
 
-export function CreateSchemaDialog({ connection }: { connection: Connection }) {
+export function CreateSchemaDialog({ connectionId }: { connectionId: string }) {
   const [schema, setSchema] = useState<string>("");
   const handleSubmit = async () => {
-    const results = await createSchema(connection, schema);
+    const results = await createSchemaById(connectionId, schema);
     if (results.success) {
       toast.success(results.message ?? "schema created successfully");
     } else {

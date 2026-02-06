@@ -91,7 +91,7 @@ export function buildSQLFragment(col: ColumnOptions, dialect: Dialect) {
   if (dialect === "mysql") {
     let typeStr = col.type;
 
-    if (["VARCHAR", "CHAR"].includes(col.type) && col.length) {
+    if (["VARCHAR", "CHAR", "varchar", "char"].includes(col.type) && col.length) {
       typeStr += `(${col.length})`;
     }
     if (["DECIMAL", "NUMERIC", "FLOAT", "DOUBLE"].includes(col.type)) {
@@ -187,7 +187,6 @@ export function buildCreateMysqlTableSQL(
   cols: ColumnOptions[],
   tableName: string,
 ) {
-  console.log(cols);
   const colDefs = cols.map((col: ColumnOptions) => {
     let typeStr = col.type;
 

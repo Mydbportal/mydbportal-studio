@@ -5,40 +5,35 @@ import JsonView from "react18-json-view";
 
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Connection, jsonPayload } from "@/types/connection";
-import { deleteRow, insertRow, updateRow } from "@/app/actions/data";
+import { jsonPayload } from "@/types/connection";
+import { deleteRowById, insertRowById, updateRowById } from "@/app/actions/data";
 import { buildFullPath } from "@/lib/helpers/helpers";
-import { unsetDocField } from "@/app/actions/mongo";
+import { unsetDocFieldById } from "@/app/actions/mongo";
 
 interface JsonViewerProps {
   data: any;
-  connection: Connection;
+  connectionId: string;
   tableName: string;
 }
 
 const JsonViewer: React.FC<JsonViewerProps> = ({
   data,
-  connection,
+  connectionId,
   tableName,
 }) => {
   const [mounted, SetMounted] = useState(false);
 
   const handleEdit = async (params: any) => {
     const { indexOrName, newValue, parentPath }: jsonPayload = params;
-    console.log("edit event", params);
-
     const fullPath = await buildFullPath(indexOrName, parentPath);
 
     const targetDoc = data[parentPath[0]];
 
     const id = targetDoc ? targetDoc._id : undefined;
-    console.log("array", params);
-    console.log("array", fullPath);
-    console.log("array", targetDoc);
 
     try {
       if (!id) {
-        const result = await insertRow(connection, tableName, {
+        const result = await insertRowById(connectionId, tableName, {
           [fullPath]: newValue,
         });
         if (result.success) {
@@ -47,7 +42,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
           toast.error(result.message ?? "Failed to insert document");
         }
       } else {
-        const result = await updateRow(connection, tableName, "_id", id, {
+        const result = await updateRowById(connectionId, tableName, "_id", id, {
           [fullPath]: newValue,
         });
         if (result.success) {
@@ -63,9 +58,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
 
   const handleDelete = async (params: any) => {
     const { indexOrName, value, parentPath }: jsonPayload = params;
-    console.log("edit event", params);
     const fullPath = await buildFullPath(indexOrName, parentPath);
-    console.log("one path", fullPath);
 
     const targetDoc = data[parentPath[0]];
 
@@ -73,7 +66,12 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
 
     try {
       if (parentPath.length > 1) {
-        const result = await unsetDocField(tableName, id, fullPath, connection);
+        const result = await unsetDocFieldById(
+          connectionId,
+          tableName,
+          id,
+          fullPath,
+        );
         if (result.success) {
           toast.success(result.message ?? "Field removed");
         } else {
@@ -85,7 +83,7 @@ const JsonViewer: React.FC<JsonViewerProps> = ({
         if (!docId) {
           throw new Error("no _id present");
         }
-        const result = await deleteRow(connection, tableName, "_id", docId);
+        const result = await deleteRowById(connectionId, tableName, "_id", docId);
         if (result.success) {
           toast.success(result.message ?? "Doc deleted successfully");
         } else {

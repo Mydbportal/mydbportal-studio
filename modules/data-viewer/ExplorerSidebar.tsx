@@ -16,14 +16,13 @@ import { Input } from "@/components/ui/input";
 import { ConnectForm } from "../connection/ConnectForm";
 import { QueryEditorDialog } from "../master-console/QueryEditorDialog";
 import { ConnectionList } from "../connection/ConnectionList";
-import { getMysqlTables } from "@/app/actions/tables";
-import { loadConnections } from "@/lib/connection-storage";
+import { getTablesById } from "@/app/actions/tables";
 import Link from "next/link";
-import { getPgTableNames, getSchemas } from "@/app/actions/postgres";
-import { getCollections } from "@/app/actions/mongo";
+import { getSchemasById } from "@/app/actions/postgres";
+import { getConnectionMeta } from "@/app/actions/connection";
 
 import SchemaOptions from "./SchemaOptions";
-import { Connection } from "@/types/connection";
+import { ConnectionSummary } from "@/types/connection";
 import {
   Select,
   SelectContent,
@@ -39,7 +38,7 @@ export function ExplorerSidebar() {
   const connectionId = searchParams.get("connectionId");
   const tableName = searchParams.get("table");
 
-  const [connected, setConnected] = useState<Connection | undefined>();
+  const [connected, setConnected] = useState<ConnectionSummary | undefined>();
   const [schemas, setSchemas] = useState<string[]>([]);
   const [selectedSchema, setSelectedSchema] = useState<string>();
   const [tables, setTables] = useState<{ name: string; count: number }[]>([]);
@@ -65,16 +64,15 @@ export function ExplorerSidebar() {
     }
 
     const loadConnection = async () => {
-      const connections = await loadConnections();
-      const conn = connections.find((c) => c.id === connectionId);
-      if (!conn) {
+      const result = await getConnectionMeta(connectionId);
+      if (!result.success || !result.connection) {
         toast.error("Connection not found", {
           description: "The selected connection could not be found.",
         });
         setConnected(undefined);
         return;
       }
-      setConnected(conn);
+      setConnected(result.connection ?? undefined);
     };
 
     loadConnection();
@@ -89,7 +87,8 @@ export function ExplorerSidebar() {
     }
 
     const fetchSchemas = async () => {
-      const schema = await getSchemas(connected);
+      if (!connectionId) return;
+      const schema = await getSchemasById(connectionId);
       if (schema.success && schema.schemas && schema.schemas.length > 0) {
         setSchemas(schema.schemas);
         setSelectedSchema(schema.schemas[0]);
@@ -100,7 +99,7 @@ export function ExplorerSidebar() {
     };
 
     fetchSchemas();
-  }, [connected]);
+  }, [connected, connectionId]);
 
   // Load tables whenever connection or schema changes
   useEffect(() => {
@@ -115,14 +114,8 @@ export function ExplorerSidebar() {
         tables?: { name: string; count: number }[];
         message?: string;
       } = { success: false, message: "Connection type not supported." };
-      if (connected.type === "mysql") {
-        result = await getMysqlTables(connected);
-      }
-      if (connected.type === "mongodb") {
-        result = await getCollections(connected);
-      }
-      if (connected.type === "postgresql") {
-        result = await getPgTableNames(connected, selectedSchema);
+      if (connectionId) {
+        result = await getTablesById(connectionId, selectedSchema);
       }
       if (result.success && result.tables) {
         setTables(result.tables);
@@ -137,7 +130,7 @@ export function ExplorerSidebar() {
     };
 
     fetchTables();
-  }, [connected, selectedSchema]);
+  }, [connected, selectedSchema, connectionId]);
 
   return (
     <div className="flex h-full flex-col gap-4 px-2 py-4 w-full">
@@ -181,8 +174,12 @@ export function ExplorerSidebar() {
             ) : (
               <div>tables</div>
             )}
-            {connected && (
-              <SchemaOptions connection={connected} schema={selectedSchema} />
+            {connected && connectionId && (
+              <SchemaOptions
+                connection={connected}
+                connectionId={connectionId}
+                schema={selectedSchema}
+              />
             )}
           </div>
 
@@ -244,10 +241,12 @@ export function ExplorerSidebar() {
                         </Badge>
                       </Link>
 
-                      {connected && (
+                      {connected && connectionId && (
                         <DeleteTriger
-                          connection={connected}
+                          connectionId={connectionId}
+                          connectionType={connected.type}
                           tableName={table.name}
+                          schema={selectedSchema}
                         />
                       )}
                     </div>

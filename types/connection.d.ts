@@ -14,6 +14,8 @@ export interface Connection {
   encryptedCredentials?: string;
 }
 
+export type ConnectionSummary = Omit<Connection, "password" | "encryptedCredentials">;
+
 export interface TableColumn {
   columnName: string;
   dataType: string;
@@ -66,7 +68,7 @@ export type ColumnOptions = {
   check?: string;
 };
 
-type Dialect = "postgresql" | "mysql" | "mongodb";
+export type Dialect = "postgresql" | "mysql" | "mongodb";
 
 export type jsonPayload = {
   indexOrName: string | number;

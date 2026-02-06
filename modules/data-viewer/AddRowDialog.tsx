@@ -13,21 +13,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Connection, TableSchema } from "@/types/connection";
-import { insertRow } from "@/app/actions/data";
+import { TableSchema } from "@/types/connection";
+import { insertRowById } from "@/app/actions/data";
 
 export const AddRowDialog = ({
   isOpen,
   onClose,
   schema,
-  connection,
+  connectionId,
   tableName,
   Schema,
 }: {
   isOpen: boolean;
   onClose: () => void;
   schema: TableSchema;
-  connection: Connection;
+  connectionId: string;
   tableName: string;
   Schema?: string;
 }) => {
@@ -35,8 +35,17 @@ export const AddRowDialog = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const shouldSkipColumn = (col: any) => {
-    if (col.isPrimaryKey && col.isAutoIncrement) return true;
-    if (col.isGenerated) return true;
+    const extra = typeof col.extra === "string" ? col.extra.toLowerCase() : "";
+    const defaultVal =
+      typeof col.defaultValue === "string"
+        ? col.defaultValue.toLowerCase()
+        : "";
+
+    const isAutoIncrement = extra.includes("auto_increment");
+    const isSerialLike = defaultVal.includes("nextval(");
+    const isIdentity = defaultVal.includes("identity");
+
+    if (isAutoIncrement || isSerialLike || isIdentity) return true;
 
     if (typeof col.defaultValue === "string") {
       const v = col.defaultValue.toLowerCase().replace(/\s+/g, "");
@@ -109,10 +118,8 @@ export const AddRowDialog = ({
 
     try {
       const cleanPayload = buildCleanPayload();
-      console.log("Payload sent to DB:", cleanPayload);
-
-      const result = await insertRow(
-        connection,
+      const result = await insertRowById(
+        connectionId,
         tableName,
         cleanPayload,
         Schema,

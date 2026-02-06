@@ -3,7 +3,7 @@
 import { mysqlConnector } from "@/lib/adapters/mysql";
 import {
   buildCreateMysqlTableSQL,
-  buildSQL,
+  buildSQLFragment,
   sanitizeIdentifier,
 } from "@/lib/helpers/helpers";
 import {
@@ -13,6 +13,7 @@ import {
   TableSchema,
 } from "@/types/connection";
 import { RowDataPacket } from "mysql2";
+import { getConnectionById } from "@/lib/server/connection-vault";
 
 interface CountRow extends RowDataPacket {
   total: number;
@@ -300,9 +301,20 @@ export async function addMysqlColumn(
       return { success: false, message: "No column definitions provided." };
     }
 
-    const query = buildSQL(columns, "mysql", tableName);
-
-    await client.query(query);
+    for (const col of columns) {
+      if (!col.name || !isValidIdent(col.name)) {
+        return {
+          success: false,
+          message: `Invalid column name: ${col.name || "(empty)"}`,
+        };
+      }
+      const fragment = buildSQLFragment(
+        { ...col, name: sanitizeIdentifier(col.name) },
+        "mysql",
+      );
+      const query = `ALTER TABLE \`${tableName}\` ADD COLUMN ${fragment}`;
+      await client.query(query);
+    }
 
     return { success: true, message: "Column(s) added successfully." };
   } catch (error: unknown) {
@@ -328,6 +340,15 @@ export async function addMysqlColumn(
   }
 }
 
+export async function addMysqlColumnById(
+  connectionId: string,
+  columns: ColumnOptions[],
+  tableName: string,
+) {
+  const connection = getConnectionById(connectionId);
+  return addMysqlColumn(connection, columns, tableName);
+}
+
 export async function createMysqlTable(
   connection: Connection,
   tableName: string,
@@ -344,8 +365,18 @@ export async function createMysqlTable(
       return { success: false, message: "Invalid table name." };
     }
 
-    const query = buildCreateMysqlTableSQL(columns, tableName);
-    console.log(query);
+    if (!columns || columns.length === 0) {
+      return { success: false, message: "At least one column is required." };
+    }
+
+    const safeColumns = columns.map((col) => {
+      if (!col.name || !isValidIdent(col.name)) {
+        throw new Error(`Invalid column name: ${col.name || "(empty)"}`);
+      }
+      return { ...col, name: sanitizeIdentifier(col.name) };
+    });
+
+    const query = buildCreateMysqlTableSQL(safeColumns, tableName);
     await client.execute(query);
 
     return { success: true, message: "Table created successfully." };
@@ -373,6 +404,15 @@ export async function createMysqlTable(
       });
     }
   }
+}
+
+export async function createMysqlTableById(
+  connectionId: string,
+  tableName: string,
+  columns: ColumnOptions[],
+) {
+  const connection = getConnectionById(connectionId);
+  return createMysqlTable(connection, tableName, columns);
 }
 
 export async function truncateMysqlTable(
@@ -423,6 +463,14 @@ export async function truncateMysqlTable(
   }
 }
 
+export async function truncateMysqlTableById(
+  connectionId: string,
+  tableName: string,
+) {
+  const connection = getConnectionById(connectionId);
+  return truncateMysqlTable(connection, tableName);
+}
+
 export async function deleteMysqlTable(
   connection: Connection,
   tableName: string,
@@ -469,4 +517,12 @@ export async function deleteMysqlTable(
       });
     }
   }
+}
+
+export async function deleteMysqlTableById(
+  connectionId: string,
+  tableName: string,
+) {
+  const connection = getConnectionById(connectionId);
+  return deleteMysqlTable(connection, tableName);
 }

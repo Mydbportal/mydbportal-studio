@@ -4,12 +4,17 @@ import { Connection } from "@/types/connection";
 import mysql from "mysql2/promise";
 import { Client as PgClient } from "pg";
 import { MongoClient } from "mongodb";
+import {
+  deleteConnection as deleteVaultConnection,
+  getConnectionSummary,
+  listConnections as listVaultConnections,
+  storeConnection,
+} from "@/lib/server/connection-vault";
+import type { ConnectionSummary } from "@/types/connection";
 
 export async function testConnection(
   connection: Partial<Connection>
 ): Promise<{ success: boolean; message: string }> {
-  console.log("Testing connection:", connection);
-
   if (!connection.host || !connection.port) {
     return {
       success: false,
@@ -28,7 +33,6 @@ export async function testConnection(
           database: connection.database,
         });
         await mysqlConnection.end();
-        console.log("Connected to MySQL successfully");
         return {
           success: true,
           message: `Successfully connected to MySQL at ${connection.host}:${connection.port}.`,
@@ -68,12 +72,69 @@ export async function testConnection(
         };
     }
   } catch (error) {
-    console.error("Connection error:", error);
     return {
       success: false,
       message: `Failed to connect to ${connection.type}: ${
         (error as { message: string }).message
       }`,
+    };
+  }
+}
+
+export async function createConnection(
+  connection: Partial<Connection>
+): Promise<{ success: boolean; connection?: ConnectionSummary; message?: string }> {
+  try {
+    const created = storeConnection(connection);
+    return { success: true, connection: created };
+  } catch (error) {
+    return {
+      success: false,
+      message: (error as Error).message ?? "Failed to create connection.",
+    };
+  }
+}
+
+export async function listConnections(): Promise<{
+  success: boolean;
+  connections?: ConnectionSummary[];
+  message?: string;
+}> {
+  try {
+    return { success: true, connections: listVaultConnections() };
+  } catch (error) {
+    return {
+      success: false,
+      message: (error as Error).message ?? "Failed to list connections.",
+    };
+  }
+}
+
+export async function removeConnection(
+  id: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    deleteVaultConnection(id);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      message: (error as Error).message ?? "Failed to delete connection.",
+    };
+  }
+}
+
+export async function getConnectionMeta(id: string): Promise<{
+  success: boolean;
+  connection?: ConnectionSummary | null;
+  message?: string;
+}> {
+  try {
+    return { success: true, connection: getConnectionSummary(id) };
+  } catch (error) {
+    return {
+      success: false,
+      message: (error as Error).message ?? "Failed to load connection.",
     };
   }
 }

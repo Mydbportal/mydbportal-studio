@@ -3,6 +3,8 @@
 import mysql from "mysql2/promise";
 import { Connection } from "@/types/connection";
 import { MongoClient } from "mongodb";
+import { getConnectionById } from "@/lib/server/connection-vault";
+import { getPgTableNames } from "./postgres";
 
 export async function getMysqlTables(connection: Connection): Promise<{
   success: boolean;
@@ -86,7 +88,6 @@ export async function getMongoTables(connection: Connection): Promise<{
       connection.protocol === "mongodb+srv"
         ? `mongodb+srv://${connection.user}:${connection.password}@${connection.host}/${connection.database}?retryWrites=true&w=majority&appName=Cluster0`
         : `mongodb://${connection.user}:${connection.password}@${connection.host}:${connection.port}/${connection.database}`;
-    console.log("Mongo URI:", mongoUri);
     const client = new MongoClient(mongoUri);
     await client.connect();
     const database = client.db(connection.database);
@@ -113,6 +114,34 @@ export async function getMongoTables(connection: Connection): Promise<{
     return {
       success: false,
       message: `Failed to fetch tables: ${(error as Error).message}`,
+    };
+  }
+}
+
+export async function getTablesById(
+  connectionId: string,
+  schema?: string
+): Promise<{
+  success: boolean;
+  tables?: { name: string; count: number }[];
+  message?: string;
+}> {
+  try {
+    const connection = getConnectionById(connectionId);
+    if (connection.type === "mysql") {
+      return getMysqlTables(connection);
+    }
+    if (connection.type === "mongodb") {
+      return getMongoTables(connection);
+    }
+    if (connection.type === "postgresql") {
+      return getPgTableNames(connection, schema);
+    }
+    return { success: false, message: "Unsupported database type." };
+  } catch (error) {
+    return {
+      success: false,
+      message: (error as Error).message ?? "Failed to fetch tables.",
     };
   }
 }

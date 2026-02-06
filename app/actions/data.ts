@@ -20,6 +20,7 @@ import {
   insertMysqlRaw,
   updateMysqlRow,
 } from "./mysql";
+import { getConnectionById } from "@/lib/server/connection-vault";
 
 interface GetTableDataResult {
   success: boolean;
@@ -128,6 +129,17 @@ export async function getTableData(
   }
 }
 
+export async function getTableDataById(
+  connectionId: string,
+  tableName: string,
+  schema?: string,
+  page: number = 1,
+  pageSize: number = 20
+): Promise<GetTableDataResult> {
+  const connection = getConnectionById(connectionId);
+  return getTableData(connection, tableName, schema, page, pageSize);
+}
+
 export async function insertRow(
   connection: Connection,
   tableName: string,
@@ -176,6 +188,16 @@ export async function insertRow(
       message: `Failed to insert row: ${(error as Error).message}`,
     };
   }
+}
+
+export async function insertRowById(
+  connectionId: string,
+  tableName: string,
+  rowData: Record<string, unknown>,
+  schema?: string
+): Promise<CrudResult> {
+  const connection = getConnectionById(connectionId);
+  return insertRow(connection, tableName, rowData, schema);
 }
 
 export async function updateRow(
@@ -248,6 +270,25 @@ export async function updateRow(
   }
 }
 
+export async function updateRowById(
+  connectionId: string,
+  tableName: string,
+  primaryKeyColumn: string,
+  primaryKeyValue: string | number,
+  rowData: Record<string, unknown>,
+  schema?: string
+): Promise<CrudResult> {
+  const connection = getConnectionById(connectionId);
+  return updateRow(
+    connection,
+    tableName,
+    primaryKeyColumn,
+    primaryKeyValue,
+    rowData,
+    schema
+  );
+}
+
 export async function deleteRow(
   connection: Connection,
   tableName: string,
@@ -305,4 +346,21 @@ export async function deleteRow(
       message: `Failed to delete row: ${(error as Error).message}`,
     };
   }
+}
+
+export async function deleteRowById(
+  connectionId: string,
+  tableName: string,
+  primaryKeyColumn: string,
+  primaryKeyValue: string | number,
+  schema?: string
+): Promise<CrudResult> {
+  const connection = getConnectionById(connectionId);
+  return deleteRow(
+    connection,
+    tableName,
+    primaryKeyColumn,
+    primaryKeyValue,
+    schema
+  );
 }
