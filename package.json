@@ -46,6 +46,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "dexie": "^4.0.10",
+    "dexie-react-hooks": "^1.1.7",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.12",
     "input-otp": "^1.4.2",

@@ -3,8 +3,8 @@
 import mysql from "mysql2/promise";
 import { Connection } from "@/types/connection";
 import { MongoClient } from "mongodb";
-import { getConnectionById } from "@/lib/server/connection-vault";
 import { getPgTableNames } from "./postgres";
+import { decryptString } from "@/lib/server/crypto";
 
 export async function getMysqlTables(connection: Connection): Promise<{
   success: boolean;
@@ -118,8 +118,22 @@ export async function getMongoTables(connection: Connection): Promise<{
   }
 }
 
-export async function getTablesById(
-  connectionId: string,
+function inflateEncryptedConnection(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+): Connection {
+  const decrypted = JSON.parse(
+    decryptString(connection.encryptedCredentials)
+  );
+  return {
+    ...connection,
+    password: decrypted.password ?? "",
+    filepath: decrypted.filepath ?? "",
+    encryptedCredentials: connection.encryptedCredentials,
+  };
+}
+
+export async function getTablesEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   schema?: string
 ): Promise<{
   success: boolean;
@@ -127,15 +141,15 @@ export async function getTablesById(
   message?: string;
 }> {
   try {
-    const connection = getConnectionById(connectionId);
-    if (connection.type === "mysql") {
-      return getMysqlTables(connection);
+    const full = inflateEncryptedConnection(connection);
+    if (full.type === "mysql") {
+      return getMysqlTables(full);
     }
-    if (connection.type === "mongodb") {
-      return getMongoTables(connection);
+    if (full.type === "mongodb") {
+      return getMongoTables(full);
     }
-    if (connection.type === "postgresql") {
-      return getPgTableNames(connection, schema);
+    if (full.type === "postgresql") {
+      return getPgTableNames(full, schema);
     }
     return { success: false, message: "Unsupported database type." };
   } catch (error) {

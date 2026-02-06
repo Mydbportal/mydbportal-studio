@@ -25,11 +25,15 @@ import {
 import { ColumnOptions, Dialect } from "@/types/connection";
 import { MYSQL_TYPES, POSTGRES_TYPES } from "@/lib/constants";
 import { buildSQLFragment } from "@/lib/helpers/helpers";
-import { addPostgresColumnById } from "@/app/actions/postgres";
+import { addPostgresColumnEncrypted } from "@/app/actions/postgres";
 import { Plus } from "lucide-react";
-import { addMysqlColumnById, createMysqlTableById } from "@/app/actions/mysql";
+import {
+  addMysqlColumnEncrypted,
+  createMysqlTableEncrypted,
+} from "@/app/actions/mysql";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { getConnectionById } from "@/lib/connection-storage";
 
 export default function AddColumnDialog({
   tableName,
@@ -103,8 +107,17 @@ export default function AddColumnDialog({
   };
 
   const handleSubmit = async () => {
+    const connection = await getConnectionById(connectionId);
+    if (!connection || !connection.encryptedCredentials) {
+      toast.error("Connection not found");
+      return;
+    }
     if (create) {
-      const result = await createMysqlTableById(connectionId, tableName, columns);
+      const result = await createMysqlTableEncrypted(
+        connection,
+        tableName,
+        columns
+      );
       if (result.success) {
         toast.success(result.message ?? "column created successfuly ");
         onSuccess?.();
@@ -113,8 +126,8 @@ export default function AddColumnDialog({
       }
     } else {
       if (dialect === "postgresql") {
-        const result = await addPostgresColumnById(
-          connectionId,
+        const result = await addPostgresColumnEncrypted(
+          connection,
           columns,
           tableName,
           schema,
@@ -126,7 +139,11 @@ export default function AddColumnDialog({
           toast.error(result.message ?? "failed to create column");
         }
       } else if (dialect === "mysql") {
-        const result = await addMysqlColumnById(connectionId, columns, tableName);
+        const result = await addMysqlColumnEncrypted(
+          connection,
+          columns,
+          tableName
+        );
         if (result.success) {
           toast.success(result.message ?? "column created successfully");
           onSuccess?.();

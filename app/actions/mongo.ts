@@ -1,9 +1,9 @@
 "use server";
 
 import { mgConnector } from "@/lib/adapters/mongo";
-import { Connection } from "@/types/connection";
+import { Connection, TableFilter } from "@/types/connection";
+import { decryptString } from "@/lib/server/crypto";
 import { ObjectId } from "mongodb";
-import { getConnectionById } from "@/lib/server/connection-vault";
 
 export async function getCollections(connection: Connection) {
   const client = await mgConnector(connection);
@@ -27,9 +27,25 @@ export async function getCollections(connection: Connection) {
   return { success: true, tables: collections };
 }
 
-export async function getCollectionsById(connectionId: string) {
-  const connection = getConnectionById(connectionId);
-  return getCollections(connection);
+function inflateEncryptedConnection(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+): Connection {
+  const decrypted = JSON.parse(
+    decryptString(connection.encryptedCredentials)
+  );
+  return {
+    ...connection,
+    password: decrypted.password ?? "",
+    filepath: decrypted.filepath ?? "",
+    encryptedCredentials: connection.encryptedCredentials,
+  };
+}
+
+export async function getCollectionsEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+) {
+  const full = inflateEncryptedConnection(connection);
+  return getCollections(full);
 }
 
 export async function deleteCollections({
@@ -97,12 +113,12 @@ export async function deleteCollections({
   }
 }
 
-export async function deleteCollectionsById(
-  connectionId: string,
+export async function deleteCollectionsEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   collection: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return deleteCollections({ collection, connection });
+  const full = inflateEncryptedConnection(connection);
+  return deleteCollections({ collection, connection: full });
 }
 
 export async function getCollectionDocs({
@@ -110,11 +126,13 @@ export async function getCollectionDocs({
   page = 1,
   pagesize = 10,
   connection,
+  filters = [],
 }: {
   collection: string;
   page?: number;
   pagesize?: number;
   connection: Connection;
+  filters?: TableFilter[];
 }): Promise<{
   success: boolean;
   data?: Record<string, unknown>[];
@@ -138,9 +156,10 @@ export async function getCollectionDocs({
     const offset = (page - 1) * pagesize;
     const db = client.db(connection.database);
     const col = db.collection(collection);
-    const total = await col.countDocuments({});
+    const query = buildMongoQuery(filters);
+    const total = await col.countDocuments(query);
     const totalPages = Math.ceil(total / pagesize);
-    const docs = await col.find().skip(offset).limit(pagesize).toArray();
+    const docs = await col.find(query).skip(offset).limit(pagesize).toArray();
 
     return {
       success: true,
@@ -174,20 +193,82 @@ export async function getCollectionDocs({
   }
 }
 
-export async function getCollectionDocsById({
-  connectionId,
-  collection,
-  page = 1,
-  pagesize = 10,
-}: {
-  connectionId: string;
-  collection: string;
-  page?: number;
-  pagesize?: number;
-}) {
-  const connection = getConnectionById(connectionId);
-  return getCollectionDocs({ collection, page, pagesize, connection });
+function buildMongoQuery(filters: TableFilter[]) {
+  const clauses: Record<string, any>[] = [];
+
+  const coerceValue = (val?: string) => {
+    if (val === undefined) return val;
+    const trimmed = val.trim();
+    if (trimmed === "") return val;
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+    const num = Number(trimmed);
+    if (!Number.isNaN(num) && trimmed === String(num)) return num;
+    return val;
+  };
+
+  filters.forEach((f) => {
+    if (!f.column) return;
+    const value = coerceValue(f.value);
+    switch (f.op) {
+      case "eq":
+        clauses.push({ [f.column]: value ?? null });
+        break;
+      case "neq":
+        clauses.push({ [f.column]: { $ne: value ?? null } });
+        break;
+      case "gt":
+        clauses.push({ [f.column]: { $gt: value } });
+        break;
+      case "gte":
+        clauses.push({ [f.column]: { $gte: value } });
+        break;
+      case "lt":
+        clauses.push({ [f.column]: { $lt: value } });
+        break;
+      case "lte":
+        clauses.push({ [f.column]: { $lte: value } });
+        break;
+      case "contains":
+        clauses.push({
+          [f.column]: { $regex: f.value ?? "", $options: "i" },
+        });
+        break;
+      case "starts_with":
+        clauses.push({
+          [f.column]: { $regex: `^${escapeRegex(f.value ?? "")}`, $options: "i" },
+        });
+        break;
+      case "ends_with":
+        clauses.push({
+          [f.column]: { $regex: `${escapeRegex(f.value ?? "")}$`, $options: "i" },
+        });
+        break;
+      case "exists":
+        clauses.push({ [f.column]: { $exists: true } });
+        break;
+      case "not_exists":
+        clauses.push({ [f.column]: { $exists: false } });
+        break;
+      case "is_null":
+        clauses.push({ [f.column]: null });
+        break;
+      case "is_not_null":
+        clauses.push({ [f.column]: { $ne: null } });
+        break;
+      default:
+        break;
+    }
+  });
+
+  if (clauses.length === 0) return {};
+  return { $and: clauses };
 }
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 
 export async function insertDoc(
   collectionName: string,
@@ -247,14 +328,6 @@ export async function insertDoc(
   }
 }
 
-export async function insertDocById(
-  connectionId: string,
-  collectionName: string,
-  document: Record<string, unknown>
-) {
-  const connection = getConnectionById(connectionId);
-  return insertDoc(collectionName, document, connection);
-}
 
 export async function updateDoc(
   collectionName: string,
@@ -321,15 +394,6 @@ export async function updateDoc(
   }
 }
 
-export async function updateDocById(
-  connectionId: string,
-  collectionName: string,
-  id: string,
-  update: Record<string, unknown>
-) {
-  const connection = getConnectionById(connectionId);
-  return updateDoc(collectionName, id, update, connection);
-}
 
 export async function unsetDocField(
   collectionName: string,
@@ -410,14 +474,14 @@ export async function unsetDocField(
   }
 }
 
-export async function unsetDocFieldById(
-  connectionId: string,
+export async function unsetDocFieldEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   collectionName: string,
   id: string,
   field: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return unsetDocField(collectionName, id, field, connection);
+  const full = inflateEncryptedConnection(connection);
+  return unsetDocField(collectionName, id, field, full);
 }
 export async function deleteDoc(
   collectionName: string,
@@ -489,14 +553,6 @@ export async function deleteDoc(
   }
 }
 
-export async function deleteDocById(
-  connectionId: string,
-  collectionName: string,
-  id: string
-) {
-  const connection = getConnectionById(connectionId);
-  return deleteDoc(collectionName, id, connection);
-}
 
 export async function createCollection(
   collectionName: string,
@@ -552,10 +608,10 @@ export async function createCollection(
   }
 }
 
-export async function createCollectionById(
-  connectionId: string,
+export async function createCollectionEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   collectionName: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return createCollection(collectionName, connection);
+  const full = inflateEncryptedConnection(connection);
+  return createCollection(collectionName, full);
 }

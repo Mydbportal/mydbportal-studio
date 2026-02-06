@@ -36,7 +36,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { createConnection, testConnection } from "@/app/actions/connection";
+import { testConnection } from "@/app/actions/connection";
+import { createConnection } from "@/lib/connection-actions";
 import { Toaster } from "@/components/ui/sonner";
 import {
   getConnectionPayload,

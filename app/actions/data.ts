@@ -5,7 +5,9 @@ import {
   TableSchema,
   TableColumn,
   CrudResult,
+  TableFilter,
 } from "@/types/connection";
+import { decryptString } from "@/lib/server/crypto";
 import { deleteDoc, getCollectionDocs, insertDoc, updateDoc } from "./mongo";
 import {
   deleteData,
@@ -20,7 +22,6 @@ import {
   insertMysqlRaw,
   updateMysqlRow,
 } from "./mysql";
-import { getConnectionById } from "@/lib/server/connection-vault";
 
 interface GetTableDataResult {
   success: boolean;
@@ -36,11 +37,18 @@ export async function getTableData(
 
   Schema?: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  filters: TableFilter[] = [],
 ): Promise<GetTableDataResult> {
   try {
     if (connection.type === "mysql") {
-      const result = await getMysqlData(connection, tableName, page, pageSize);
+      const result = await getMysqlData(
+        connection,
+        tableName,
+        page,
+        pageSize,
+        filters,
+      );
       if (result.success) {
         return {
           success: true,
@@ -78,6 +86,7 @@ export async function getTableData(
         schema: Schema,
         limit: pageSize,
         page,
+        filters,
       });
 
       if (!dataResult.success || !dataResult.rows) {
@@ -97,6 +106,7 @@ export async function getTableData(
           connection,
           page,
           pagesize: pageSize,
+          filters,
         });
         if (result.success) {
           return {
@@ -129,15 +139,30 @@ export async function getTableData(
   }
 }
 
-export async function getTableDataById(
-  connectionId: string,
+function inflateEncryptedConnection(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+): Connection {
+  const decrypted = JSON.parse(
+    decryptString(connection.encryptedCredentials)
+  );
+  return {
+    ...connection,
+    password: decrypted.password ?? "",
+    filepath: decrypted.filepath ?? "",
+    encryptedCredentials: connection.encryptedCredentials,
+  };
+}
+
+export async function getTableDataEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  filters: TableFilter[] = []
 ): Promise<GetTableDataResult> {
-  const connection = getConnectionById(connectionId);
-  return getTableData(connection, tableName, schema, page, pageSize);
+  const full = inflateEncryptedConnection(connection);
+  return getTableData(full, tableName, schema, page, pageSize, filters);
 }
 
 export async function insertRow(
@@ -190,14 +215,14 @@ export async function insertRow(
   }
 }
 
-export async function insertRowById(
-  connectionId: string,
+export async function insertRowEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   rowData: Record<string, unknown>,
   schema?: string
 ): Promise<CrudResult> {
-  const connection = getConnectionById(connectionId);
-  return insertRow(connection, tableName, rowData, schema);
+  const full = inflateEncryptedConnection(connection);
+  return insertRow(full, tableName, rowData, schema);
 }
 
 export async function updateRow(
@@ -270,17 +295,17 @@ export async function updateRow(
   }
 }
 
-export async function updateRowById(
-  connectionId: string,
+export async function updateRowEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   primaryKeyColumn: string,
   primaryKeyValue: string | number,
   rowData: Record<string, unknown>,
   schema?: string
 ): Promise<CrudResult> {
-  const connection = getConnectionById(connectionId);
+  const full = inflateEncryptedConnection(connection);
   return updateRow(
-    connection,
+    full,
     tableName,
     primaryKeyColumn,
     primaryKeyValue,
@@ -348,16 +373,16 @@ export async function deleteRow(
   }
 }
 
-export async function deleteRowById(
-  connectionId: string,
+export async function deleteRowEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   primaryKeyColumn: string,
   primaryKeyValue: string | number,
   schema?: string
 ): Promise<CrudResult> {
-  const connection = getConnectionById(connectionId);
+  const full = inflateEncryptedConnection(connection);
   return deleteRow(
-    connection,
+    full,
     tableName,
     primaryKeyColumn,
     primaryKeyValue,

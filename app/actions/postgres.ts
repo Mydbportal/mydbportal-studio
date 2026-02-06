@@ -2,8 +2,8 @@
 
 import { pgConnector } from "@/lib/adapters/postgres";
 import { buildSQLFragment } from "@/lib/helpers/helpers";
-import { ColumnOptions, Connection } from "@/types/connection";
-import { getConnectionById } from "@/lib/server/connection-vault";
+import { ColumnOptions, Connection, TableFilter } from "@/types/connection";
+import { decryptString } from "@/lib/server/crypto";
 
 interface CountRow {
   total: number;
@@ -57,9 +57,25 @@ export async function getSchemas(connection: Connection): Promise<{
   }
 }
 
-export async function getSchemasById(connectionId: string) {
-  const connection = getConnectionById(connectionId);
-  return getSchemas(connection);
+function inflateEncryptedConnection(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+): Connection {
+  const decrypted = JSON.parse(
+    decryptString(connection.encryptedCredentials)
+  );
+  return {
+    ...connection,
+    password: decrypted.password ?? "",
+    filepath: decrypted.filepath ?? "",
+    encryptedCredentials: connection.encryptedCredentials,
+  };
+}
+
+export async function getSchemasEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string }
+) {
+  const full = inflateEncryptedConnection(connection);
+  return getSchemas(full);
 }
 
 export async function getPgTableNames(
@@ -139,12 +155,12 @@ export async function getPgTableNames(
   }
 }
 
-export async function getPgTableNamesById(
-  connectionId: string,
+export async function getPgTableNamesEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return getPgTableNames(connection, schema);
+  const full = inflateEncryptedConnection(connection);
+  return getPgTableNames(full, schema);
 }
 
 export async function getTableColumns(
@@ -256,12 +272,14 @@ export async function getTableDatas({
   schema,
   limit = 20,
   page = 1,
+  filters = [],
 }: {
   connection: Connection;
   tableName: string;
   schema?: string;
   limit?: number;
   page?: number;
+  filters?: TableFilter[];
 }): Promise<{
   success: boolean;
   rows?: Record<string, unknown>[];
@@ -289,15 +307,19 @@ export async function getTableDatas({
       ? `"${schema}"."${tableName}"`
       : `"${tableName}"`;
 
-    const query = `SELECT COUNT(*)::int AS total FROM ${fullTableName}`;
+    const { whereSql, params } = buildPostgresWhere(filters);
 
-    const { rows } = await client.query<CountRow>(query);
+    const query = `SELECT COUNT(*)::int AS total FROM ${fullTableName}${whereSql}`;
+
+    const { rows } = await client.query<CountRow>(query, params);
 
     const totalPages: number = Math.ceil(rows[0]?.total / limit);
 
     const response = await client.query<Record<string, unknown>>(
-      `SELECT * FROM ${fullTableName} LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      `SELECT * FROM ${fullTableName}${whereSql} LIMIT $${params.length + 1} OFFSET $${
+        params.length + 2
+      }`,
+      [...params, limit, offset]
     );
 
     return { success: true, rows: response.rows, totalPages };
@@ -331,6 +353,73 @@ export async function getTableDatas({
       });
     }
   }
+}
+
+function buildPostgresWhere(filters: TableFilter[]) {
+  const clauses: string[] = [];
+  const params: Array<string | number | boolean | null> = [];
+  const isValidIdent = (name: string) =>
+    /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
+  const quoteIdent = (ident: string) => `"${ident.replace(/\"/g, '\"\"')}"`;
+
+  filters.forEach((f) => {
+    if (!f.column || !isValidIdent(f.column)) return;
+    const col = quoteIdent(f.column);
+    const nextParam = () => `$${params.length + 1}`;
+
+    switch (f.op) {
+      case "eq":
+        clauses.push(`${col} = ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "neq":
+        clauses.push(`${col} != ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "gt":
+        clauses.push(`${col} > ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "gte":
+        clauses.push(`${col} >= ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "lt":
+        clauses.push(`${col} < ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "lte":
+        clauses.push(`${col} <= ${nextParam()}`);
+        params.push(f.value ?? "");
+        break;
+      case "contains":
+        clauses.push(`${col} ILIKE ${nextParam()}`);
+        params.push(`%${f.value ?? ""}%`);
+        break;
+      case "starts_with":
+        clauses.push(`${col} ILIKE ${nextParam()}`);
+        params.push(`${f.value ?? ""}%`);
+        break;
+      case "ends_with":
+        clauses.push(`${col} ILIKE ${nextParam()}`);
+        params.push(`%${f.value ?? ""}`);
+        break;
+      case "is_null":
+        clauses.push(`${col} IS NULL`);
+        break;
+      case "is_not_null":
+        clauses.push(`${col} IS NOT NULL`);
+        break;
+      default:
+        break;
+    }
+  });
+
+  if (clauses.length === 0) {
+    return { whereSql: "", params: [] as Array<string | number | boolean | null> };
+  }
+
+  return { whereSql: ` WHERE ${clauses.join(" AND ")}`, params };
 }
 
 export async function insertDatas(
@@ -613,13 +702,13 @@ export async function createTable(
   }
 }
 
-export async function createTableById(
-  connectionId: string,
+export async function createTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return createTable(connection, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return createTable(full, tableName, schema);
 }
 
 export async function addPostgresColumn(
@@ -685,14 +774,14 @@ export async function addPostgresColumn(
   }
 }
 
-export async function addPostgresColumnById(
-  connectionId: string,
+export async function addPostgresColumnEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   columns: ColumnOptions[],
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return addPostgresColumn(connection, columns, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return addPostgresColumn(full, columns, tableName, schema);
 }
 
 export async function createSchema(
@@ -745,9 +834,12 @@ export async function createSchema(
   }
 }
 
-export async function createSchemaById(connectionId: string, schema: string) {
-  const connection = getConnectionById(connectionId);
-  return createSchema(connection, schema);
+export async function createSchemaEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
+  schema: string
+) {
+  const full = inflateEncryptedConnection(connection);
+  return createSchema(full, schema);
 }
 
 export async function deletePgTable(
@@ -806,13 +898,13 @@ export async function deletePgTable(
   }
 }
 
-export async function deletePgTableById(
-  connectionId: string,
+export async function deletePgTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return deletePgTable(connection, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return deletePgTable(full, tableName, schema);
 }
 
 export async function truncatePgTable(
@@ -871,11 +963,11 @@ export async function truncatePgTable(
   }
 }
 
-export async function truncatePgTableById(
-  connectionId: string,
+export async function truncatePgTableEncrypted(
+  connection: Omit<Connection, "password"> & { encryptedCredentials: string },
   tableName: string,
   schema?: string
 ) {
-  const connection = getConnectionById(connectionId);
-  return truncatePgTable(connection, tableName, schema);
+  const full = inflateEncryptedConnection(connection);
+  return truncatePgTable(full, tableName, schema);
 }

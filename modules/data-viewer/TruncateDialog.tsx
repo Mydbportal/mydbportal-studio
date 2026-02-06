@@ -1,7 +1,7 @@
 "use client";
 
-import { truncateMysqlTableById } from "@/app/actions/mysql";
-import { truncatePgTableById } from "@/app/actions/postgres";
+import { truncateMysqlTableEncrypted } from "@/app/actions/mysql";
+import { truncatePgTableEncrypted } from "@/app/actions/postgres";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { getConnectionById } from "@/lib/connection-storage";
 
 function TruncateTrigger({
   connectionId,
@@ -35,8 +36,13 @@ function TruncateTrigger({
   }, [input, tableName]);
 
   const handleTruncate = async () => {
+    const connection = await getConnectionById(connectionId);
+    if (!connection || !connection.encryptedCredentials) {
+      toast.error("Connection not found");
+      return;
+    }
     if (connectionType === "mysql") {
-      const result = await truncateMysqlTableById(connectionId, tableName);
+      const result = await truncateMysqlTableEncrypted(connection, tableName);
       if (result.success) {
         toast.success(result.message ?? "Table truncated successfully");
         onSuccess?.();
@@ -44,7 +50,7 @@ function TruncateTrigger({
         toast.error(result.message ?? "Failed to truncate table");
       }
     } else if (connectionType === "postgresql") {
-      const result = await truncatePgTableById(connectionId, tableName);
+      const result = await truncatePgTableEncrypted(connection, tableName);
       if (result.success) {
         toast.success(result.message ?? "Table truncated successfully");
         onSuccess?.();

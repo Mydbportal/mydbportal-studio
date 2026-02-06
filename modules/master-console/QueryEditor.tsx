@@ -35,9 +35,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { executeQueryById } from "@/app/actions/query";
-import { ConnectionSummary } from "@/types/connection";
-import { getConnectionMeta } from "@/app/actions/connection";
+import { executeEncryptedQuery } from "@/app/actions/query";
+import { Connection, ConnectionSummary } from "@/types/connection";
+import { getConnectionById } from "@/lib/connection-storage";
 import { useSearchParams } from "next/navigation";
 import {
   Sheet,
@@ -55,9 +55,10 @@ export function QueryEditor() {
   const searchParams = useSearchParams();
 
   const connectionId = searchParams.get("connectionId");
-  const [activeConnection, setConnection] = React.useState<ConnectionSummary | null>(
-    null
-  );
+  const [activeConnection, setConnection] =
+    React.useState<ConnectionSummary | null>(null);
+  const [activeConnectionFull, setConnectionFull] =
+    React.useState<Connection | null>(null);
 
   React.useEffect(() => {
     async function GetConnection() {
@@ -65,12 +66,25 @@ export function QueryEditor() {
         setError("Connection not found.");
         return;
       }
-      const result = await getConnectionMeta(connectionId);
-      if (!result.success || !result.connection) {
+      const connection = await getConnectionById(connectionId);
+      if (!connection) {
         setError("Connection not found.");
         return;
       }
-      setConnection(result.connection);
+      setConnection({
+        id: connection.id,
+        name: connection.name,
+        type: connection.type,
+        host: connection.host,
+        protocol: connection.protocol ?? undefined,
+        search: connection.search ?? undefined,
+        port: connection.port ?? undefined,
+        user: connection.user,
+        database: connection.database,
+        filepath: connection.filepath,
+        ssl: connection.ssl,
+      });
+      setConnectionFull(connection);
     }
     GetConnection();
   }, [connectionId]);
@@ -95,8 +109,12 @@ export function QueryEditor() {
   };
 
   const handleRunQuery = async () => {
-    if (!activeTab || !activeConnection) {
+    if (!activeTab || !activeConnectionFull) {
       setError("No active connection or query tab.");
+      return;
+    }
+    if (!activeConnectionFull.encryptedCredentials) {
+      setError("Connection credentials are missing.");
       return;
     }
 
@@ -114,8 +132,8 @@ export function QueryEditor() {
       return;
     }
 
-    const { data, error } = await executeQueryById(
-      connectionId,
+    const { data, error } = await executeEncryptedQuery(
+      activeConnectionFull,
       activeTab.query
     );
 

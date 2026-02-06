@@ -1,6 +1,6 @@
-import { deleteCollectionsById } from "@/app/actions/mongo";
-import { deleteMysqlTableById } from "@/app/actions/mysql";
-import { deletePgTableById } from "@/app/actions/postgres";
+import { deleteCollectionsEncrypted } from "@/app/actions/mongo";
+import { deleteMysqlTableEncrypted } from "@/app/actions/mysql";
+import { deletePgTableEncrypted } from "@/app/actions/postgres";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { getConnectionById } from "@/lib/connection-storage";
 
 function DeleteTriger({
   connectionId,
@@ -37,8 +38,13 @@ function DeleteTriger({
     }
   }, [table, tableName]);
   const handleDelete = async () => {
+    const connection = await getConnectionById(connectionId);
+    if (!connection || !connection.encryptedCredentials) {
+      toast.error("Connection not found");
+      return;
+    }
     if (connectionType === "mongodb") {
-      const result = await deleteCollectionsById(connectionId, tableName);
+      const result = await deleteCollectionsEncrypted(connection, tableName);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
         onSuccess?.();
@@ -46,7 +52,7 @@ function DeleteTriger({
         toast.error(result.message ?? "Failed to delete collection");
       }
     } else if (connectionType === "mysql") {
-      const result = await deleteMysqlTableById(connectionId, tableName);
+      const result = await deleteMysqlTableEncrypted(connection, tableName);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
         onSuccess?.();
@@ -54,7 +60,7 @@ function DeleteTriger({
         toast.error(result.message ?? "Failed to delete collection");
       }
     } else if (connectionType === "postgresql") {
-      const result = await deletePgTableById(connectionId, tableName, schema);
+      const result = await deletePgTableEncrypted(connection, tableName, schema);
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
         onSuccess?.();

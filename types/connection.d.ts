@@ -30,6 +30,27 @@ export interface TableSchema {
   columns: TableColumn[];
 }
 
+export type FilterOp =
+  | "eq"
+  | "neq"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "starts_with"
+  | "ends_with"
+  | "is_null"
+  | "is_not_null"
+  | "exists"
+  | "not_exists";
+
+export interface TableFilter {
+  column: string;
+  op: FilterOp;
+  value?: string;
+}
+
 export type postgresConfig = {
   host: string;
   port?: number;
