@@ -376,6 +376,7 @@ export function TableViewer() {
             data={tableData}
             connectionId={connectionId!}
             tableName={tableName}
+            onRefresh={fetchTableData}
           />
         </CardContent>
         <CardFooter className="border-t pt-4">
@@ -524,6 +525,10 @@ export function TableViewer() {
                 dialect={connection.type}
                 tableName={tableName}
                 schema={schema ? schema : undefined}
+                onSuccess={() => {
+                  fetchTableSchema();
+                  fetchTableData();
+                }}
               />
             ) : (
               ""
@@ -533,6 +538,7 @@ export function TableViewer() {
                 connectionId={connectionId}
                 connectionType={connection.type}
                 tableName={tableName}
+                onSuccess={fetchTableData}
               />
             )}
             <Tooltip>
@@ -787,6 +793,7 @@ export function TableViewer() {
           connectionId={connectionId}
           tableName={tableName!}
           Schema={schema ? schema : undefined}
+          onSuccess={fetchTableData}
         />
       )}
 

@@ -14,12 +14,19 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { toast } from "sonner";
 
-export function CreateSchemaDialog({ connectionId }: { connectionId: string }) {
+export function CreateSchemaDialog({
+  connectionId,
+  onSuccess,
+}: {
+  connectionId: string;
+  onSuccess?: () => void;
+}) {
   const [schema, setSchema] = useState<string>("");
   const handleSubmit = async () => {
     const results = await createSchemaById(connectionId, schema);
     if (results.success) {
       toast.success(results.message ?? "schema created successfully");
+      onSuccess?.();
     } else {
       toast.error(results.message ?? "failed to create schema");
     }

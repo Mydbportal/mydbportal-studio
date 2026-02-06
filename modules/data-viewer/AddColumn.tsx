@@ -37,12 +37,14 @@ export default function AddColumnDialog({
   dialect,
   schema,
   create,
+  onSuccess,
 }: {
   tableName: string;
   dialect: Dialect;
   connectionId: string;
   schema?: string;
   create?: boolean;
+  onSuccess?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -105,6 +107,7 @@ export default function AddColumnDialog({
       const result = await createMysqlTableById(connectionId, tableName, columns);
       if (result.success) {
         toast.success(result.message ?? "column created successfuly ");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "failed to create column");
       }
@@ -118,6 +121,7 @@ export default function AddColumnDialog({
         );
         if (result.success) {
           toast.success(result.message ?? "column created successfuly ");
+          onSuccess?.();
         } else {
           toast.error(result.message ?? "failed to create column");
         }
@@ -125,6 +129,7 @@ export default function AddColumnDialog({
         const result = await addMysqlColumnById(connectionId, columns, tableName);
         if (result.success) {
           toast.success(result.message ?? "column created successfully");
+          onSuccess?.();
         } else {
           toast.error(result.message ?? "failed to create column");
         }

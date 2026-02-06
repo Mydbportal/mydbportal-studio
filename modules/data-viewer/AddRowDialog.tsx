@@ -23,6 +23,7 @@ export const AddRowDialog = ({
   connectionId,
   tableName,
   Schema,
+  onSuccess,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -30,6 +31,7 @@ export const AddRowDialog = ({
   connectionId: string;
   tableName: string;
   Schema?: string;
+  onSuccess?: () => void;
 }) => {
   const [newRowData, setNewRowData] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -127,6 +129,7 @@ export const AddRowDialog = ({
 
       if (result.success) {
         toast.success("Row Added", { description: result.message });
+        onSuccess?.();
         onClose();
       } else {
         toast.error("Add Row Failed", { description: result.message });

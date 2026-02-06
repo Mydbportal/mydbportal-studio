@@ -13,10 +13,14 @@ function SchemaOptions({
   connection,
   connectionId,
   schema,
+  onTablesChanged,
+  onSchemasChanged,
 }: {
   connection: ConnectionSummary;
   connectionId: string;
   schema?: string;
+  onTablesChanged?: () => void;
+  onSchemasChanged?: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -26,13 +30,17 @@ function SchemaOptions({
       <DropdownMenuContent>
         <div className="flex flex-col  py-4 px-1  w-60">
           {connection.type === "postgresql" && (
-            <CreateSchemaDialog connectionId={connectionId} />
+            <CreateSchemaDialog
+              connectionId={connectionId}
+              onSuccess={onSchemasChanged}
+            />
           )}
 
           <CreateTableDialog
             connectionId={connectionId}
             connectionType={connection.type}
             schema={schema}
+            onSuccess={onTablesChanged}
           />
         </div>
       </DropdownMenuContent>

@@ -31,10 +31,12 @@ export function CreateTableDialog({
   connectionId,
   connectionType,
   schema,
+  onSuccess,
 }: {
   connectionId: string;
   connectionType: "postgresql" | "mysql" | "mongodb";
   schema?: string;
+  onSuccess?: () => void;
 }) {
   const [table, setTable] = useState<string>("");
   const [columns, setColumns] = useState<ColumnOptions[]>([
@@ -87,6 +89,7 @@ export function CreateTableDialog({
       const result = await createTableById(connectionId, table, schema);
       if (result.success) {
         toast.success(result.message ?? "Table create successfully");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "failed to create table");
       }
@@ -94,6 +97,7 @@ export function CreateTableDialog({
       const result = await createCollectionById(connectionId, table);
       if (result.success) {
         toast.success(result.message ?? "table created successfully ");
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "failed to create table");
       }
@@ -158,6 +162,7 @@ export function CreateTableDialog({
             check: "",
           },
         ]);
+        onSuccess?.();
       } else {
         toast.error(result.message ?? "failed to create table");
       }
