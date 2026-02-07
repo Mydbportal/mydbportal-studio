@@ -48,6 +48,34 @@ To get a local copy up and running, follow these simple steps.
     ```
 4.  Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
+## Desktop (Electron)
+
+The project includes an Electron scaffold that always runs the app on
+`http://127.0.0.1:9221`, so Dexie/IndexedDB persists across runs.
+
+1. Install dependencies:
+   ```sh
+   bun install
+   ```
+2. Run desktop app in development mode:
+   ```sh
+   bun run desktop:dev
+   ```
+3. Build desktop installers:
+   ```sh
+   bun run desktop:dist
+   ```
+4. (Optional) run desktop app against production Next server locally:
+   ```sh
+   bun run desktop:run
+   ```
+
+### Desktop Build Targets
+
+- Linux: `AppImage`, `deb`, `rpm`
+- macOS: `dmg`, `zip`
+- Windows: `nsis`, `portable`
+
 ## Technologies Used
 
 - **Framework:** [Next.js](https://nextjs.org/)
