@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ExplorerSidebar } from "@/modules/data-viewer/ExplorerSidebar";
 import { TableViewer } from "@/modules/data-viewer/TableViewer";
-import { createConnection } from "@/app/actions/connection";
+import { createConnection } from "@/lib/connection-actions";
 import { Connection } from "@/types/connection";
 import Image from "next/image";
 import Link from "next/link";
