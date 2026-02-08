@@ -2,6 +2,7 @@
   "name": "masterdbstudio",
   "version": "0.1.0",
   "private": true,
+  "author": "Mydbportal Studio Team <noreply@mydbportal.com>",
   "main": "electron/main.mjs",
   "scripts": {
     "dev": "next dev --turbopack",
@@ -156,7 +157,11 @@
         "deb",
         "rpm"
       ],
-      "category": "Development"
+      "maintainer": "Hubfly space team <info@hubfly.cloud>",
+      "category": "Database"
+    },
+    "deb": {
+      "maintainer": "Hubfly space team <info@hubfly.cloud>"
     }
   }
 }
