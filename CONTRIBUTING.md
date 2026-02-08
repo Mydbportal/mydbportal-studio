@@ -1,87 +1,124 @@
-# Contributing to MyDbPortal Studio
+# Contributing to Mydbportal Studio
 
-First off, thank you for considering contributing to MyDbPortal Studio! It's people like you that make open source such a great community.
+Thanks for your interest in contributing.
 
-We welcome any type of contribution, not just code. You can help with:
-* **Reporting a bug**
-* **Discussing the current state of the code**
-* **Submitting a fix**
-* **Proposing new features**
-* **Becoming a maintainer**
+This document explains how to contribute safely and efficiently to this
+repository.
 
-## Getting Started
+## Ways to Contribute
+
+- Report bugs
+- Propose features
+- Improve documentation
+- Submit code fixes or enhancements
+- Review pull requests
+
+## Project Stack
+
+- Next.js App Router
+- TypeScript
+- Tailwind CSS + shadcn/ui
+- Database drivers: `pg`, `mysql2`, `mongodb`
+- Desktop packaging: Electron + `electron-builder`
+
+## Development Setup
 
 ### Prerequisites
 
-Before you begin, ensure you have the following installed:
-- [Node.js](https://nodejs.org/) (v20.0 or higher)
+- Node.js 20+
+- Bun (recommended for local development)
+- Git
 
-### Development Environment Setup
 
-1. **Fork the repository** on GitHub.
-2. **Clone your fork** locally:
+
+## Branching and Commits
+
+- Create feature branches from `main`.
+- Keep each branch focused on one change.
+- Use clear commit messages.
+- Conventional Commit format is recommended:
+  - `feat: add schema picker validation`
+  - `fix: sanitize mysql table name`
+  - `docs: update desktop release steps`
+
+## Code Guidelines
+
+- Follow existing file/module structure:
+  - `app/actions/*` for server actions
+  - `lib/adapters/*` for DB connectors
+  - `modules/*` for UI features
+- Prefer explicit TypeScript types.
+- Avoid `any` unless unavoidable and documented.
+- Reuse existing UI components before adding new primitives.
+- Keep changes minimal and scoped.
+- Validate SQL and identifier handling when touching DB logic.
+
+## Quality Checks Before Opening a PR
+
+Run these locally:
+
+```bash
+bun run lint
+bun run build
+```
+
+Also perform manual verification for the area you changed:
+
+- Connection flows (add/select/delete)
+- DB-specific paths (PostgreSQL/MySQL/MongoDB) if affected
+- Electron path if desktop code changed
+
+## Pull Request Process
+
+1. Fork the repository to your own GitHub account.
+2. Clone your forked repository to your local machine.
+3. Create a new branch:git checkout -b <branch-name>
+1. Push your branch:
    ```bash
-   git clone https://github.com/your-username/mydbportal-studio.git
-   cd mydbportal-studio
+   git push origin <branch-name>
    ```
-3. **Install dependencies** using Bun:
-   ```bash
-   bun install
-   ```
-4. **Run the development server**:
-   ```bash
-   bun dev
-   ```
-   The application will be available at `http://localhost:3000`.
+2. Open a PR against `main`.
+3. Complete the PR template:
+   - Description of the change
+   - Linked issue (`Fixes #...`)
+   - Type of change
+   - Test steps
+4. Include screenshots for UI changes if applicable.
+5. Update docs when behavior or workflows change.
+6. Respond to review feedback and push follow-up commits.
 
-## Development Workflow
+## Issues
 
-### Making Changes
+Use GitHub issue templates:
 
-1. Create a new branch for your feature or bug fix:
-   ```bash
-   git checkout -b my-awesome-feature
-   ```
-2. Make your changes to the codebase.
-3. **Lint your code** to ensure it follows the project's style guidelines:
-   ```bash
-   bun lint
-   ```
-4. **Build the project** to make sure everything compiles correctly:
-    ```bash
-    bun build
-    ```
-5. Commit your changes with a descriptive commit message:
-   ```bash
-   git commit -m "feat: add my awesome feature"
-   ```
-   While we don't enforce a strict commit message format, we encourage you to write clear and concise messages.
+- Bug reports: `.github/ISSUE_TEMPLATE/bug_report.md`
+- Feature requests: `.github/ISSUE_TEMPLATE/feature_request.md`
 
-### Submitting a Pull Request
+When reporting a bug, include:
 
-1. Push your branch to your fork:
-   ```bash
-   git push origin my-awesome-feature
-   ```
-2. Open a pull request to the `main` branch of the original repository.
-3. Fill out the pull request template with the required information.
-4. Your pull request will be reviewed by the maintainers. Be prepared to answer questions and make changes if requested.
+- Reproduction steps
+- Expected vs actual behavior
+- Logs/error text
+- Environment details
 
-## Coding Style
+## Security
 
-We use [ESLint](https://eslint.org/) with the standard Next.js configuration to enforce a consistent coding style. Before submitting a pull request, please run `bun lint` and fix any reported issues.
+Do not post sensitive credentials, connection strings, or keys in issues/PRs.
 
-The project uses [Tailwind CSS](https://tailwindcss.com/) for styling and [shadcn/ui](https://ui.shadcn.com/) for components. Please adhere to the existing conventions when adding or modifying UI elements.
+If you find a security issue, use a private disclosure path (GitHub Security
+Advisory) instead of a public issue.
 
-## Reporting Bugs and Suggesting Features
+## Release Notes for Maintainers
 
-We use GitHub Issues to track bugs and feature requests.
+Desktop releases are built by GitHub Actions workflow:
 
-- **To report a bug**, please open an issue with the "Bug Report" template and provide as much detail as possible.
-- **To suggest a feature**, please open an issue with the "Feature Request" template and describe your idea.
+- `.github/workflows/electron-release.yml`
 
-## Questions?
+Publishing a GitHub Release with a tag (for example `v0.1.0`) triggers
+cross-platform Electron builds and uploads assets to that release.
 
-If you have any questions, feel free to open an issue or join our community channels.
+## Contributor Etiquette
 
-Thank you for your contribution!
+- Be respectful and constructive in discussions.
+- Assume good intent.
+- Focus reviews on code quality and behavior.

@@ -194,7 +194,7 @@ export async function getCollectionDocs({
 }
 
 function buildMongoQuery(filters: TableFilter[]) {
-  const clauses: Record<string, any>[] = [];
+  const clauses: Record<string, unknown>[] = [];
 
   const coerceValue = (val?: string) => {
     if (val === undefined) return val;
