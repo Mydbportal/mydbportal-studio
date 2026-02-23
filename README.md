@@ -36,9 +36,9 @@ To get a local copy up and running, follow these simple steps.
 
 1.  Clone the repo
     ```sh
-    git clone https://github.com/your_username/master-database-studio.git
+    git clone https://github.com/Mydbportal/mydbportal-studio.git
     ```
-2.  Install NPM packages
+2.  Install NPM packages (Delete bun.lock to use the package manager of your choice)
     ```sh
     bun install
     ```
