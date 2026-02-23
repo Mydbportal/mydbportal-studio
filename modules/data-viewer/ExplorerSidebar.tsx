@@ -12,6 +12,12 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { ConnectForm } from "../connection/ConnectForm";
 import { QueryEditorDialog } from "../master-console/QueryEditorDialog";
@@ -33,10 +39,27 @@ import {
 import { SelectTrigger } from "@radix-ui/react-select";
 import DeleteTriger from "./DeleteTriger";
 
+type EncryptedConnection = Connection & {
+  encryptedCredentials: string;
+};
+
+const hasEncryptedCredentials = (
+  connection?: Connection,
+): connection is EncryptedConnection =>
+  typeof connection?.encryptedCredentials === "string" &&
+  connection.encryptedCredentials.length > 0;
+
+const toEncryptedConnection = (
+  connection?: Connection,
+): EncryptedConnection | null => {
+  if (!hasEncryptedCredentials(connection)) return null;
+  return connection;
+};
+
 export function ExplorerSidebar() {
   const searchParams = useSearchParams();
   const connectionId = searchParams.get("connectionId");
-  const tableName = searchParams.get("table");
+  const tableName = searchParams.get("tableName");
 
   const [connected, setConnected] = useState<ConnectionSummary | undefined>();
   const [connectedFull, setConnectedFull] = useState<Connection | undefined>();
@@ -104,8 +127,9 @@ export function ExplorerSidebar() {
     }
 
     const fetchSchemas = async () => {
-      if (!connectedFull || !connectedFull.encryptedCredentials) return;
-      const schema = await getSchemasEncrypted(connectedFull);
+      const encryptedConnection = toEncryptedConnection(connectedFull);
+      if (!encryptedConnection) return;
+      const schema = await getSchemasEncrypted(encryptedConnection);
       if (schema.success && schema.schemas && schema.schemas.length > 0) {
         setSchemas(schema.schemas);
         setSelectedSchema(schema.schemas[0]);
@@ -131,8 +155,9 @@ export function ExplorerSidebar() {
         tables?: { name: string; count: number }[];
         message?: string;
       } = { success: false, message: "Connection type not supported." };
-      if (connectedFull && connectedFull.encryptedCredentials) {
-        result = await getTablesEncrypted(connectedFull, selectedSchema);
+      const encryptedConnection = toEncryptedConnection(connectedFull);
+      if (encryptedConnection) {
+        result = await getTablesEncrypted(encryptedConnection, selectedSchema);
       }
       if (result.success && result.tables) {
         setTables(result.tables);
@@ -224,63 +249,67 @@ export function ExplorerSidebar() {
               </div>
 
               {/* Table List */}
-              <div className="flex flex-col gap-1 max-h-[50vh] w-full overflow-auto">
-                {loadingTables ? (
-                  <p className="text-sm text-muted-foreground px-3 py-2">
-                    Loading tables...
-                  </p>
-                ) : filteredTables.length === 0 ? (
-                  <p className="text-sm text-muted-foreground px-3 py-2">
-                    {connectionId
-                      ? "No tables found"
-                      : "Select a connection to view tables."}
-                  </p>
-                ) : (
-                  filteredTables.map((table) => (
-                    <div
-                      className="flex w-full justify-between pr-4"
-                      key={table.name}
-                    >
-                      <Link
-                        href={`/studio?connectionId=${connectionId}&tableName=${
-                          table.name
-                        }${selectedSchema ? `&schema=${selectedSchema}` : ""}`}
-                        onClick={() => setActiveTable(table.name)}
-                        className={cn(
-                          "flex items-center justify-between gap-3 rounded-md px-1 py-2 text-sm text-muted-foreground transition-all hover:bg-muted/50 group hover:text-foreground",
-                          activeTable === table.name &&
-                            "bg-muted/90 font-medium text-foreground dark:bg-muted",
-                        )}
-                      >
-                        <div className="flex items-center gap-2 relative">
-                          <Table className="h-4 w-4" />
-                          <span>
-                            {table.name.length > 7
-                              ? `${table.name.slice(0, 7)}..`
-                              : table.name}
-                          </span>
-                        </div>
+              <TooltipProvider delayDuration={150}>
+                <div className="flex flex-col gap-1 max-h-[50vh] w-full overflow-auto">
+                  {loadingTables ? (
+                    <p className="text-sm text-muted-foreground px-3 py-2">
+                      Loading tables...
+                    </p>
+                  ) : filteredTables.length === 0 ? (
+                    <p className="text-sm text-muted-foreground px-3 py-2">
+                      {connectionId
+                        ? "No tables found"
+                        : "Select a connection to view tables."}
+                    </p>
+                  ) : (
+                    filteredTables.map((table) => (
+                      <div className="flex w-full items-center gap-2" key={table.name}>
+                        <Link
+                          href={`/studio?connectionId=${connectionId}&tableName=${
+                            table.name
+                          }${selectedSchema ? `&schema=${selectedSchema}` : ""}`}
+                          onClick={() => setActiveTable(table.name)}
+                          className={cn(
+                            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground",
+                            activeTable === table.name &&
+                              "bg-muted/90 font-medium text-foreground dark:bg-muted",
+                          )}
+                        >
+                          <Table className="h-4 w-4 shrink-0" />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="truncate">{table.name}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={8} align="center">
+                              <p className="max-w-[28rem] break-all">{table.name}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </Link>
+
                         <Badge
                           variant="secondary"
-                          className="font-mono text-xs"
+                          title={`${table.count.toLocaleString()} rows`}
+                          className="inline-flex h-6 min-w-[3.25rem] items-center justify-center px-2 font-mono text-xs tabular-nums"
                         >
                           {table.count.toLocaleString()}
                         </Badge>
-                      </Link>
 
-                      {connected && connectionId && (
-                        <DeleteTriger
-                          connectionId={connectionId}
-                          connectionType={connected.type}
-                          tableName={table.name}
-                          schema={selectedSchema}
-                          onSuccess={handleTablesChanged}
-                        />
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                        {connected && connectionId && (
+                          <div className="shrink-0">
+                            <DeleteTriger
+                              connectionId={connectionId}
+                              connectionType={connected.type}
+                              tableName={table.name}
+                              schema={selectedSchema}
+                              onSuccess={handleTablesChanged}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TooltipProvider>
             </div>
           </AccordionContent>
         </AccordionItem>

@@ -40,6 +40,14 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -71,6 +79,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
   Connection,
@@ -90,6 +99,66 @@ import AddColumnDialog from "./AddColumn";
 import TruncateTrigger from "./TruncateDialog";
 
 const JsonViewer = dynamic(() => import("./JsonViewer"), { ssr: false });
+
+const JSON_TYPE_REGEX = /\bjsonb?\b/i;
+const MAX_JSON_PREVIEW_LENGTH = 120;
+
+type JsonEditorState = {
+  open: boolean;
+  rowId: string | null;
+  columnName: string;
+  text: string;
+  primaryKeyValue: string | number | null;
+  useRowDraft: boolean;
+};
+
+const EMPTY_JSON_EDITOR: JsonEditorState = {
+  open: false,
+  rowId: null,
+  columnName: "",
+  text: "",
+  primaryKeyValue: null,
+  useRowDraft: false,
+};
+
+const getJsonEditorText = (value: unknown) => {
+  if (value === undefined) return "";
+  if (value === null) return "null";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+      return value;
+    }
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
+const getJsonCellPreview = (value: unknown) => {
+  const raw = getJsonEditorText(value);
+  if (!raw.trim()) return "(empty)";
+  const oneLine = raw.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= MAX_JSON_PREVIEW_LENGTH) return oneLine;
+  return `${oneLine.slice(0, MAX_JSON_PREVIEW_LENGTH)}...`;
+};
+
+const parseJsonEditorValue = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error('JSON value cannot be empty. Use valid JSON like {}, [], or "text".');
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new Error("Invalid JSON format.");
+  }
+};
 
 export function TableViewer() {
   const searchParams = useSearchParams();
@@ -112,6 +181,8 @@ export function TableViewer() {
   const [editingRowData, setEditingRowData] = useState<Record<string, unknown>>(
     {},
   );
+  const [jsonEditor, setJsonEditor] = useState<JsonEditorState>(EMPTY_JSON_EDITOR);
+  const [isSavingJsonEditor, setIsSavingJsonEditor] = useState(false);
   const [isAddRowDialogOpen, setIsAddRowDialogOpen] = useState(false);
 
   const [deleteAlert, setDeleteAlert] = useState<{
@@ -323,6 +394,50 @@ export function TableViewer() {
     return [];
   }, [tableSchema, connection?.type, tableData]);
 
+  const jsonColumnNames = useMemo(() => {
+    if (!tableSchema?.columns) return new Set<string>();
+    return new Set(
+      tableSchema.columns
+        .filter((column) => JSON_TYPE_REGEX.test(column.dataType ?? ""))
+        .map((column) => column.columnName),
+    );
+  }, [tableSchema]);
+
+  const normalizeSqlPayload = useCallback(
+    (payload: Record<string, unknown>) => {
+      if (jsonColumnNames.size === 0) return payload;
+
+      const normalized: Record<string, unknown> = { ...payload };
+      for (const [columnName, value] of Object.entries(payload)) {
+        if (!jsonColumnNames.has(columnName)) continue;
+        if (value === null || value === undefined) {
+          normalized[columnName] = value;
+          continue;
+        }
+
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (!trimmed) {
+            throw new Error(
+              `Column "${columnName}" expects valid JSON. Use null, {}, [], or a JSON string.`,
+            );
+          }
+          try {
+            JSON.parse(trimmed);
+          } catch {
+            throw new Error(`Column "${columnName}" has invalid JSON.`);
+          }
+          normalized[columnName] = trimmed;
+          continue;
+        }
+
+        normalized[columnName] = JSON.stringify(value);
+      }
+      return normalized;
+    },
+    [jsonColumnNames],
+  );
+
   const sqlOperators = [
     { value: "eq", label: "=" },
     { value: "neq", label: "!=" },
@@ -399,6 +514,101 @@ export function TableViewer() {
     setEditingRowData({ ...row });
   };
 
+  const handleJsonCellOpen = (
+    row: Record<string, unknown>,
+    rowId: string | null,
+    columnName: string,
+  ) => {
+    const useRowDraft = editingRowId === rowId && rowId !== null;
+    const value = useRowDraft ? editingRowData[columnName] : row[columnName];
+    const pkValue = primaryKeyColumn ? row[primaryKeyColumn] : null;
+
+    setJsonEditor({
+      open: true,
+      rowId,
+      columnName,
+      text: getJsonEditorText(value),
+      primaryKeyValue:
+        typeof pkValue === "string" || typeof pkValue === "number"
+          ? pkValue
+          : null,
+      useRowDraft,
+    });
+  };
+
+  const handleJsonEditorClose = () => {
+    setJsonEditor(EMPTY_JSON_EDITOR);
+    setIsSavingJsonEditor(false);
+  };
+
+  const handleSaveJsonCell = async () => {
+    if (!jsonEditor.columnName || !tableName) return;
+
+    let parsedValue: unknown;
+    try {
+      parsedValue = parseJsonEditorValue(jsonEditor.text);
+    } catch (err) {
+      toast.error("Invalid JSON", { description: (err as Error).message });
+      return;
+    }
+
+    if (
+      jsonEditor.useRowDraft &&
+      jsonEditor.rowId &&
+      editingRowId === jsonEditor.rowId
+    ) {
+      setEditingRowData((prev) => ({
+        ...prev,
+        [jsonEditor.columnName]: parsedValue,
+      }));
+      toast.success("JSON Updated", {
+        description: "Value applied to the row edit form.",
+      });
+      handleJsonEditorClose();
+      return;
+    }
+
+    if (
+      !connectionFull ||
+      !connectionFull.encryptedCredentials ||
+      !primaryKeyColumn ||
+      jsonEditor.primaryKeyValue === null
+    ) {
+      toast.error("JSON Update Failed", {
+        description: "Unable to update this cell without a primary key.",
+      });
+      return;
+    }
+
+    setIsSavingJsonEditor(true);
+    try {
+      const payload = normalizeSqlPayload({
+        [jsonEditor.columnName]: parsedValue,
+      });
+      const result = await updateRowEncrypted(
+        connectionFull,
+        tableName,
+        primaryKeyColumn,
+        jsonEditor.primaryKeyValue,
+        payload,
+        schema ? schema : undefined,
+      );
+      if (result.success) {
+        toast.success("JSON Updated", { description: result.message });
+        handleJsonEditorClose();
+        fetchTableData();
+      } else {
+        toast.error("Update Failed", { description: result.message });
+      }
+    } catch (err) {
+      toast.error("JSON Update Error", {
+        description: (err as Error).message,
+      });
+    } finally {
+      setIsSavingJsonEditor(false);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (
       !connectionFull ||
@@ -410,12 +620,13 @@ export function TableViewer() {
       return;
 
     try {
+      const normalizedPayload = normalizeSqlPayload(editingRowData);
       const result = await updateRowEncrypted(
         connectionFull,
         tableName,
         primaryKeyColumn,
         editingRowId,
-        editingRowData,
+        normalizedPayload,
         schema ? schema : undefined,
       );
       if (result.success) {
@@ -475,6 +686,31 @@ export function TableViewer() {
     }
     setDeleteAlert({ open: false, rowIds: [], isBulk: false });
   };
+
+  const selectableRowIds = useMemo(() => {
+    if (!primaryKeyColumn) return [] as string[];
+    return paginatedData
+      .map((row) => row[primaryKeyColumn])
+      .filter(
+        (value): value is string | number =>
+          value !== null && value !== undefined,
+      )
+      .map((value) => String(value));
+  }, [paginatedData, primaryKeyColumn]);
+
+  const isAllOnPageSelected =
+    selectableRowIds.length > 0 &&
+    selectableRowIds.every((id) => selectedRows.includes(id));
+  const isAnyOnPageSelected = selectableRowIds.some((id) =>
+    selectedRows.includes(id),
+  );
+  const canPersistJsonEditor =
+    jsonEditor.useRowDraft ||
+    (!!connectionFull &&
+      !!connectionFull.encryptedCredentials &&
+      !!tableName &&
+      !!primaryKeyColumn &&
+      jsonEditor.primaryKeyValue !== null);
 
   if (loading) {
     return (
@@ -685,15 +921,6 @@ export function TableViewer() {
     );
   }
 
-  const isAllOnPageSelected =
-    paginatedData.length > 0 &&
-    paginatedData.every((row) =>
-      selectedRows.includes(String(row[primaryKeyColumn!])),
-    );
-  const isAnyOnPageSelected = paginatedData.some((row) =>
-    selectedRows.includes(String(row[primaryKeyColumn!])),
-  );
-
   return (
     <TooltipProvider>
       <Card className="h-full flex flex-col overflow-y-auto">
@@ -893,15 +1120,19 @@ export function TableViewer() {
                     checked={isAllOnPageSelected}
                     onCheckedChange={(checked) => {
                       if (!primaryKeyColumn) return;
-                      const pageIds = paginatedData.map(
-                        (r) => r[primaryKeyColumn],
-                      );
+                      const pageIds = paginatedData
+                        .map((r) => r[primaryKeyColumn])
+                        .filter(
+                          (id): id is string | number =>
+                            id !== null && id !== undefined,
+                        )
+                        .map((id) => String(id));
                       if (checked) {
                         setSelectedRows((prev) => [
                           ...Array.from(
                             new Set<string>([
                               ...prev,
-                              ...pageIds.map((id) => String(id)),
+                              ...pageIds,
                             ]),
                           ),
                         ]);
@@ -955,60 +1186,103 @@ export function TableViewer() {
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedData.map((row) => {
+                paginatedData.map((row, rowIndex) => {
+                  const hasPrimaryKeyValue = primaryKeyColumn
+                    ? row[primaryKeyColumn] !== null &&
+                      row[primaryKeyColumn] !== undefined
+                    : false;
+                  const primaryKeyValue = hasPrimaryKeyValue
+                    ? row[primaryKeyColumn!]
+                    : null;
                   const rowId = primaryKeyColumn
-                    ? row[primaryKeyColumn]?.toString()
+                    ? hasPrimaryKeyValue
+                      ? String(primaryKeyValue)
+                      : `__row_${rowIndex}`
                     : JSON.stringify(row);
+                  const isRowEditing =
+                    hasPrimaryKeyValue &&
+                    editingRowId === String(primaryKeyValue);
                   return (
                     <TableRow
                       key={rowId}
-                      data-state={selectedRows.includes(rowId!) && "selected"}
+                      data-state={selectedRows.includes(rowId) && "selected"}
                     >
                       <TableCell>
                         <Checkbox
-                          checked={selectedRows.includes(rowId!)}
-                          onCheckedChange={() => handleSelectRow(rowId!)}
+                          checked={hasPrimaryKeyValue && selectedRows.includes(rowId)}
+                          onCheckedChange={() =>
+                            hasPrimaryKeyValue && handleSelectRow(rowId)
+                          }
                           aria-label={`Select row ${rowId}`}
+                          disabled={!hasPrimaryKeyValue}
                         />
                       </TableCell>
                       {tableSchema.columns
                         .filter((c) => visibleColumns.includes(c.columnName))
-                        .map((col) => (
-                          <TableCell
-                            key={col.columnName}
-                            className="max-w-xs truncate"
-                          >
-                            {editingRowId === rowId ? (
-                              <Input
-                                value={
-                                  typeof editingRowData[col.columnName] ===
-                                    "object" &&
-                                  editingRowData[col.columnName] !== null
-                                    ? JSON.stringify(
-                                        editingRowData[col.columnName],
-                                      )
-                                    : editingRowData[col.columnName] !==
-                                        undefined
-                                      ? String(editingRowData[col.columnName])
-                                      : ""
-                                }
-                                onChange={(e) =>
-                                  setEditingRowData((prev) => ({
-                                    ...prev,
-                                    [col.columnName]: e.target.value,
-                                  }))
-                                }
-                                className="h-8"
-                              />
-                            ) : (
-                              <span title={String(row[col.columnName])}>
-                                {row[col.columnName]?.toString()}
-                              </span>
-                            )}
-                          </TableCell>
-                        ))}
+                        .map((col) => {
+                          const isJsonColumn = jsonColumnNames.has(col.columnName);
+                          const cellValue =
+                            isRowEditing
+                              ? editingRowData[col.columnName]
+                              : row[col.columnName];
+
+                          return (
+                            <TableCell
+                              key={col.columnName}
+                              className="max-w-xs truncate"
+                            >
+                              {isJsonColumn ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 max-w-full justify-start px-2 font-mono text-xs"
+                                  onClick={() =>
+                                    handleJsonCellOpen(
+                                      row,
+                                      hasPrimaryKeyValue ? rowId : null,
+                                      col.columnName,
+                                    )
+                                  }
+                                >
+                                  <span
+                                    className="truncate"
+                                    title={getJsonEditorText(cellValue)}
+                                  >
+                                    {getJsonCellPreview(cellValue)}
+                                  </span>
+                                </Button>
+                              ) : isRowEditing ? (
+                                <Input
+                                  value={
+                                    typeof editingRowData[col.columnName] ===
+                                      "object" &&
+                                    editingRowData[col.columnName] !== null
+                                      ? JSON.stringify(
+                                          editingRowData[col.columnName],
+                                        )
+                                      : editingRowData[col.columnName] !==
+                                          undefined
+                                        ? String(editingRowData[col.columnName])
+                                        : ""
+                                  }
+                                  onChange={(e) =>
+                                    setEditingRowData((prev) => ({
+                                      ...prev,
+                                      [col.columnName]: e.target.value,
+                                    }))
+                                  }
+                                  className="h-8"
+                                />
+                              ) : (
+                                <span title={String(row[col.columnName])}>
+                                  {row[col.columnName]?.toString()}
+                                </span>
+                              )}
+                            </TableCell>
+                          );
+                        })}
                       <TableCell className="text-right">
-                        {editingRowId === rowId ? (
+                        {isRowEditing ? (
                           <div className="flex gap-2 justify-end">
                             <Button
                               variant="outline"
@@ -1037,12 +1311,16 @@ export function TableViewer() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
                                 onClick={() => handleEditClick(row)}
+                                disabled={!hasPrimaryKeyValue}
                               >
                                 <Pencil className="mr-2 h-4 w-4" /> Edit Row
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                onClick={() => handleDeleteRequest([rowId!])}
+                                onClick={() =>
+                                  hasPrimaryKeyValue && handleDeleteRequest([rowId])
+                                }
+                                disabled={!hasPrimaryKeyValue}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete Row
                               </DropdownMenuItem>
@@ -1121,6 +1399,51 @@ export function TableViewer() {
           onSuccess={fetchTableData}
         />
       )}
+
+      <Dialog
+        open={jsonEditor.open}
+        onOpenChange={(open) => !open && handleJsonEditorClose()}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>JSON Field: {jsonEditor.columnName}</DialogTitle>
+            <DialogDescription>
+              {jsonEditor.useRowDraft
+                ? "Editing this value in the current row draft."
+                : canPersistJsonEditor
+                  ? "Review and edit this JSON value, then save it back to the table."
+                  : "This row cannot be updated directly because it has no primary key value."}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={jsonEditor.text}
+            onChange={(e) =>
+              setJsonEditor((prev) => ({ ...prev, text: e.target.value }))
+            }
+            className="min-h-[320px] font-mono text-xs"
+            placeholder='Enter valid JSON (e.g. {"key":"value"})'
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleJsonEditorClose}
+              disabled={isSavingJsonEditor}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveJsonCell}
+              disabled={isSavingJsonEditor || !canPersistJsonEditor}
+            >
+              {isSavingJsonEditor
+                ? "Saving..."
+                : jsonEditor.useRowDraft
+                  ? "Apply to Row"
+                  : "Save JSON"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={deleteAlert.open}
