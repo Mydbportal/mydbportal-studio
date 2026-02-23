@@ -72,6 +72,10 @@ export function ExplorerSidebar() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [schemaTick, setSchemaTick] = useState(0);
 
+  useEffect(() => {
+    setActiveTable(tableName || "");
+  }, [tableName]);
+
   // Filter tables efficiently
   const filteredTables = useMemo(() => {
     return tables.filter((t) =>
@@ -81,22 +85,30 @@ export function ExplorerSidebar() {
 
   // Load connection whenever connectionId changes
   useEffect(() => {
+    let cancelled = false;
+
+    setConnected(undefined);
+    setConnectedFull(undefined);
+    setSchemas([]);
+    setSelectedSchema(undefined);
+    setTables([]);
+
     if (!connectionId) {
-      setConnected(undefined);
-      setSchemas([]);
-      setSelectedSchema(undefined);
-      setTables([]);
+      setLoadingTables(false);
       return;
     }
+    setLoadingTables(true);
 
     const loadConnection = async () => {
       const result = await getConnectionById(connectionId);
+      if (cancelled) return;
       if (!result) {
         toast.error("Connection not found", {
           description: "The selected connection could not be found.",
         });
         setConnected(undefined);
         setConnectedFull(undefined);
+        setLoadingTables(false);
         return;
       }
       setConnected({
@@ -116,23 +128,43 @@ export function ExplorerSidebar() {
     };
 
     loadConnection();
+
+    return () => {
+      cancelled = true;
+    };
   }, [connectionId]);
 
   // Load schemas if PostgreSQL
   useEffect(() => {
-    if (!connected || connected.type !== "postgresql") {
+    let cancelled = false;
+
+    if (
+      !connectionId ||
+      !connected ||
+      connected.id !== connectionId ||
+      connected.type !== "postgresql"
+    ) {
       setSchemas([]);
       setSelectedSchema(undefined);
       return;
     }
 
+    const encryptedConnection = toEncryptedConnection(connectedFull);
+    if (!encryptedConnection || encryptedConnection.id !== connectionId) {
+      return;
+    }
+
     const fetchSchemas = async () => {
-      const encryptedConnection = toEncryptedConnection(connectedFull);
-      if (!encryptedConnection) return;
       const schema = await getSchemasEncrypted(encryptedConnection);
-      if (schema.success && schema.schemas && schema.schemas.length > 0) {
-        setSchemas(schema.schemas);
-        setSelectedSchema(schema.schemas[0]);
+      if (cancelled) return;
+      const schemaList = schema.schemas ?? [];
+      if (schema.success && schemaList.length > 0) {
+        setSchemas(schemaList);
+        setSelectedSchema((current) =>
+          current && schemaList.includes(current)
+            ? current
+            : schemaList[0],
+        );
       } else {
         setSchemas([]);
         setSelectedSchema(undefined);
@@ -140,28 +172,58 @@ export function ExplorerSidebar() {
     };
 
     fetchSchemas();
+
+    return () => {
+      cancelled = true;
+    };
   }, [connected, connectedFull, connectionId, schemaTick]);
 
   // Load tables whenever connection or schema changes
   useEffect(() => {
-    if (!connected) {
+    let cancelled = false;
+
+    if (!connectionId) {
       setTables([]);
+      setLoadingTables(false);
       return;
     }
+
+    if (!connected || connected.id !== connectionId) {
+      setTables([]);
+      setLoadingTables(true);
+      return;
+    }
+
+    const encryptedConnection = toEncryptedConnection(connectedFull);
+    if (!encryptedConnection || encryptedConnection.id !== connectionId) {
+      setTables([]);
+      setLoadingTables(true);
+      return;
+    }
+
     const fetchTables = async () => {
       setLoadingTables(true);
-      let result: {
+      const result: {
         success: boolean;
         tables?: { name: string; count: number }[];
         message?: string;
-      } = { success: false, message: "Connection type not supported." };
-      const encryptedConnection = toEncryptedConnection(connectedFull);
-      if (encryptedConnection) {
-        result = await getTablesEncrypted(encryptedConnection, selectedSchema);
-      }
-      if (result.success && result.tables) {
-        setTables(result.tables);
-        setActiveTable(result.tables[0]?.name || "");
+      } = await getTablesEncrypted(encryptedConnection, selectedSchema);
+
+      if (cancelled) return;
+
+      const tableList = result.tables ?? [];
+
+      if (result.success) {
+        setTables(tableList);
+        setActiveTable((current) => {
+          if (tableName && tableList.some((table) => table.name === tableName)) {
+            return tableName;
+          }
+          if (current && tableList.some((table) => table.name === current)) {
+            return current;
+          }
+          return tableList[0]?.name ?? "";
+        });
       } else {
         toast.error("Failed to load tables", {
           description: result.message || "An unknown error occurred.",
@@ -172,7 +234,18 @@ export function ExplorerSidebar() {
     };
 
     fetchTables();
-  }, [connected, connectedFull, selectedSchema, connectionId, refreshTick]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    connected,
+    connectedFull,
+    selectedSchema,
+    connectionId,
+    refreshTick,
+    tableName,
+  ]);
 
   const handleTablesChanged = () => {
     setRefreshTick((t) => t + 1);
@@ -263,7 +336,10 @@ export function ExplorerSidebar() {
                     </p>
                   ) : (
                     filteredTables.map((table) => (
-                      <div className="flex w-full items-center gap-2" key={table.name}>
+                      <div
+                        className="flex w-full items-center gap-2"
+                        key={table.name}
+                      >
                         <Link
                           href={`/studio?connectionId=${connectionId}&tableName=${
                             table.name
@@ -280,8 +356,14 @@ export function ExplorerSidebar() {
                             <TooltipTrigger asChild>
                               <span className="truncate">{table.name}</span>
                             </TooltipTrigger>
-                            <TooltipContent side="right" sideOffset={8} align="center">
-                              <p className="max-w-[28rem] break-all">{table.name}</p>
+                            <TooltipContent
+                              side="right"
+                              sideOffset={8}
+                              align="center"
+                            >
+                              <p className="max-w-[28rem] break-all">
+                                {table.name}
+                              </p>
                             </TooltipContent>
                           </Tooltip>
                         </Link>

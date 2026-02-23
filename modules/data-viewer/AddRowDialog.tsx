@@ -13,9 +13,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TableSchema } from "@/types/connection";
+import { Connection, TableSchema } from "@/types/connection";
 import { insertRowEncrypted } from "@/app/actions/data";
 import { getConnectionById } from "@/lib/connection-storage";
+
+type EncryptedConnection = Connection & {
+  encryptedCredentials: string;
+};
+
+const hasEncryptedCredentials = (
+  connection?: Connection | null,
+): connection is EncryptedConnection =>
+  typeof connection?.encryptedCredentials === "string" &&
+  connection.encryptedCredentials.length > 0;
 
 export const AddRowDialog = ({
   isOpen,
@@ -121,7 +131,7 @@ export const AddRowDialog = ({
 
     try {
       const connection = await getConnectionById(connectionId);
-      if (!connection || !connection.encryptedCredentials) {
+      if (!hasEncryptedCredentials(connection)) {
         throw new Error("Connection credentials are missing.");
       }
       const cleanPayload = buildCleanPayload();
