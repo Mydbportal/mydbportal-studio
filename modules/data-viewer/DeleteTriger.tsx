@@ -15,6 +15,27 @@ import { Input } from "@/components/ui/input";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getConnectionById } from "@/lib/connection-storage";
+import type { Connection } from "@/types/connection";
+
+type EncryptedConnection = Connection & {
+  encryptedCredentials: string;
+};
+
+const toEncryptedConnection = (
+  connection: Connection | null,
+): EncryptedConnection | null => {
+  if (
+    connection &&
+    typeof connection.encryptedCredentials === "string" &&
+    connection.encryptedCredentials.length > 0
+  ) {
+    return {
+      ...connection,
+      encryptedCredentials: connection.encryptedCredentials,
+    };
+  }
+  return null;
+};
 
 function DeleteTriger({
   connectionId,
@@ -29,22 +50,24 @@ function DeleteTriger({
   schema?: string;
   onSuccess?: () => void;
 }) {
-  const [table, setTable] = useState<string>();
+  const [table, setTable] = useState<string>("");
   const [confirmed, setConfirmed] = useState<boolean>(false);
 
   useEffect(() => {
-    if (table === tableName) {
-      setConfirmed(true);
-    }
+    setConfirmed(table === tableName);
   }, [table, tableName]);
   const handleDelete = async () => {
     const connection = await getConnectionById(connectionId);
-    if (!connection || !connection.encryptedCredentials) {
+    const encryptedConnection = toEncryptedConnection(connection);
+    if (!encryptedConnection) {
       toast.error("Connection not found");
       return;
     }
     if (connectionType === "mongodb") {
-      const result = await deleteCollectionsEncrypted(connection, tableName);
+      const result = await deleteCollectionsEncrypted(
+        encryptedConnection,
+        tableName,
+      );
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
         onSuccess?.();
@@ -52,7 +75,10 @@ function DeleteTriger({
         toast.error(result.message ?? "Failed to delete collection");
       }
     } else if (connectionType === "mysql") {
-      const result = await deleteMysqlTableEncrypted(connection, tableName);
+      const result = await deleteMysqlTableEncrypted(
+        encryptedConnection,
+        tableName,
+      );
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
         onSuccess?.();
@@ -60,7 +86,11 @@ function DeleteTriger({
         toast.error(result.message ?? "Failed to delete collection");
       }
     } else if (connectionType === "postgresql") {
-      const result = await deletePgTableEncrypted(connection, tableName, schema);
+      const result = await deletePgTableEncrypted(
+        encryptedConnection,
+        tableName,
+        schema,
+      );
       if (result.success) {
         toast.success(result.message ?? "collection deleted successdfully");
         onSuccess?.();
@@ -71,10 +101,15 @@ function DeleteTriger({
   };
   return (
     <Dialog>
-      <DialogTrigger>
-        <div className=" px-1 rounded-md text-xs text-white bg-red-600 hover:bg-red-500 cursor-pointer h-5 ">
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="h-6 px-2 text-xs cursor-pointer"
+        >
           Drop
-        </div>
+        </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
